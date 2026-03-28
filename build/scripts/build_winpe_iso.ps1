@@ -110,7 +110,7 @@ function Invoke-CmdBatchFile {
         }
 
         if ($process.ExitCode -ne 0) {
-            throw ("Batch komutu basarisiz oldu ({0}): {1}" -f $process.ExitCode, $BatchPath)
+            throw ("Batch komutu basarisiz oldu ({0}): {1} | cmd.exe /d /s /c {2}" -f $process.ExitCode, $BatchPath, $cmdArgument)
         }
     }
     finally {
@@ -186,14 +186,16 @@ function Resolve-WinPeArchitecture {
             }
 
             $ocRoot = Join-Path $architectureRoot "WinPE_OCs"
-            $proofCandidates = @(
-                $ocRoot,
-                (Join-Path $architectureRoot "Media"),
-                (Join-Path $architectureRoot "en-us")
-            )
+            $mediaRoot = Join-Path $architectureRoot "Media"
+            $proofCandidates = @($mediaRoot, $ocRoot)
             $proofPath = $proofCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
             if (-not $proofPath) {
                 Write-BuildLog ("WinPE mimari klasoru bulundu ama kullanilabilir payload kaniti yok: {0}" -f $architectureRoot) "WARN"
+                continue
+            }
+
+            if (-not (Test-Path -LiteralPath $mediaRoot -PathType Container)) {
+                Write-BuildLog ("WinPE mimari klasoru bulundu ama Media eksik: {0}" -f $architectureRoot) "WARN"
                 continue
             }
 
@@ -207,6 +209,7 @@ function Resolve-WinPeArchitecture {
                 WinPeRoot        = $winPeRoot
                 ArchitectureRoot = $architectureRoot
                 OcRoot           = $ocRoot
+                MediaRoot        = $mediaRoot
                 ProofPath        = $proofPath
                 Rank             = $rank[$architecture]
             })
@@ -232,6 +235,76 @@ function Resolve-WinPeArchitecture {
     Write-BuildLog ("Secilen WinPE mimari kok dizini: {0}" -f $selected.ArchitectureRoot)
     Write-BuildLog ("Secimi dogrulayan dizin: {0}" -f $selected.ProofPath)
     return $selected
+}
+
+function Resolve-CopypeArchitectureTokens {
+    param(
+        [Parameter(Mandatory = $true)][string]$CopypePath,
+        [Parameter(Mandatory = $true)][string]$FilesystemArchitecture
+    )
+
+    $defaultTokenMap = @{
+        "amd64" = @("amd64", "x64")
+        "x86"   = @("x86")
+        "arm64" = @("arm64")
+    }
+
+    $tokenCandidates = New-Object System.Collections.Generic.List[string]
+    foreach ($token in ($defaultTokenMap[$FilesystemArchitecture])) {
+        if (-not [string]::IsNullOrWhiteSpace($token) -and -not $tokenCandidates.Contains($token)) {
+            $tokenCandidates.Add($token)
+        }
+    }
+
+    try {
+        $copypeContent = Get-Content -LiteralPath $CopypePath -Raw -ErrorAction Stop
+        $hintLines = @(
+            ($copypeContent -split "`r?`n") |
+                Where-Object { $_ -match '(?i)(usage|architecture|amd64|x64|x86|arm64)' } |
+                Select-Object -First 8
+        )
+        if ($hintLines.Count -gt 0) {
+            Write-BuildLog ("copype ipucu satirlari: {0}" -f ($hintLines -join " || "))
+        }
+
+        $hasAmd64Token = $copypeContent -match '(?i)(?<![A-Za-z0-9_])amd64(?![A-Za-z0-9_])'
+        $hasX64Token = $copypeContent -match '(?i)(?<![A-Za-z0-9_])x64(?![A-Za-z0-9_])'
+        $hasX86Token = $copypeContent -match '(?i)(?<![A-Za-z0-9_])x86(?![A-Za-z0-9_])'
+        $hasArm64Token = $copypeContent -match '(?i)(?<![A-Za-z0-9_])arm64(?![A-Za-z0-9_])'
+
+        $discoveredTokens = New-Object System.Collections.Generic.List[string]
+        if ($hasAmd64Token) { $discoveredTokens.Add("amd64") }
+        if ($hasX64Token) { $discoveredTokens.Add("x64") }
+        if ($hasX86Token) { $discoveredTokens.Add("x86") }
+        if ($hasArm64Token) { $discoveredTokens.Add("arm64") }
+        if ($discoveredTokens.Count -gt 0) {
+            Write-BuildLog ("copype icinde gorulen mimari tokenleri: {0}" -f ($discoveredTokens -join ", "))
+        }
+
+        if ($FilesystemArchitecture -eq "amd64") {
+            if ($hasX64Token -and -not $hasAmd64Token) {
+                $tokenCandidates.Clear()
+                $tokenCandidates.Add("x64")
+                $tokenCandidates.Add("amd64")
+            }
+            elseif ($hasAmd64Token -and -not $hasX64Token) {
+                $tokenCandidates.Clear()
+                $tokenCandidates.Add("amd64")
+                $tokenCandidates.Add("x64")
+            }
+        }
+    }
+    catch {
+        Write-BuildLog ("copype icerigi okunamadi, varsayilan token sirasi kullanilacak: " + $_.Exception.Message) "WARN"
+    }
+
+    if ($tokenCandidates.Count -eq 0) {
+        throw ("copype icin gecerli token adayi olusturulamadi. Dosya sistemi mimarisi: {0}" -f $FilesystemArchitecture)
+    }
+
+    Write-BuildLog ("copype dosya sistemi mimarisi: {0}" -f $FilesystemArchitecture)
+    Write-BuildLog ("copype komut token adaylari: {0}" -f ($tokenCandidates -join ", "))
+    return @($tokenCandidates.ToArray())
 }
 
 function Find-ToolPath {
@@ -580,10 +653,54 @@ Write-BuildLog ("copype.cmd yolu: {0}" -f $copype)
 Write-BuildLog ("copype.cmd mevcut mu: {0}" -f (Test-Path -LiteralPath $copype -PathType Leaf))
 Write-BuildLog ("WinPE work root: {0}" -f $workRoot)
 Write-BuildLog ("WinPE work root mevcut mu (oncesi): {0}" -f (Test-Path -LiteralPath $workRoot))
-Write-BuildLog ("copype icin secilen mimari: {0}" -f $winPeArchitecture)
-New-Item -ItemType Directory -Force -Path (Split-Path $workRoot -Parent) | Out-Null
+$copypeTokenCandidates = Resolve-CopypeArchitectureTokens -CopypePath $copype -FilesystemArchitecture $winPeArchitecture
+$copypeWorkRootParent = Split-Path $workRoot -Parent
+Write-BuildLog ("copype icin secilen mimari klasoru: {0}" -f $winPeArchitecture)
+Write-BuildLog ("copype icin secilen mimari klasor kaniti: {0}" -f $winPeLayout.ProofPath)
+New-Item -ItemType Directory -Force -Path $copypeWorkRootParent | Out-Null
 
-Invoke-CmdBatchFile -BatchPath $copype -Arguments @($winPeArchitecture, $workRoot) -WorkingDirectory (Split-Path $workRoot -Parent)
+$copypeSucceeded = $false
+$copypeLastError = $null
+$copypeSuccessfulToken = $null
+for ($tokenIndex = 0; $tokenIndex -lt $copypeTokenCandidates.Count; $tokenIndex++) {
+    $copypeToken = [string]$copypeTokenCandidates[$tokenIndex]
+    if (Test-Path -LiteralPath $workRoot) {
+        Write-BuildLog "Yeni copype denemesi oncesi work root temizleniyor."
+        Remove-Item -Recurse -Force $workRoot
+    }
+
+    Write-BuildLog ("copype denemesi | mimari klasoru={0} | komut tokeni={1}" -f $winPeArchitecture, $copypeToken)
+    try {
+        Invoke-CmdBatchFile -BatchPath $copype -Arguments @($copypeToken, $workRoot) -WorkingDirectory $copypeWorkRootParent
+        $copypeSucceeded = $true
+        $copypeSuccessfulToken = $copypeToken
+        break
+    }
+    catch {
+        $copypeLastError = $_
+        Write-BuildLog (
+            "copype denemesi basarisiz | mimari klasoru={0} | komut tokeni={1} | hata={2}" -f
+            $winPeArchitecture,
+            $copypeToken,
+            $_.Exception.Message
+        ) "WARN"
+
+        if ($tokenIndex -lt ($copypeTokenCandidates.Count - 1)) {
+            Write-BuildLog "copype icin esdeger alternatif token denenecek." "WARN"
+        }
+    }
+}
+
+if (-not $copypeSucceeded) {
+    throw (
+        "copype basarisiz. Mimari klasoru={0}; denenen tokenler={1}; son hata={2}" -f
+        $winPeArchitecture,
+        ($copypeTokenCandidates -join ", "),
+        $copypeLastError.Exception.Message
+    )
+}
+
+Write-BuildLog ("copype basarili | mimari klasoru={0} | komut tokeni={1}" -f $winPeArchitecture, $copypeSuccessfulToken)
 
 Write-BuildLog ("WinPE work root mevcut mu (sonrasi): {0}" -f (Test-Path -LiteralPath $workRoot))
 Assert-Path -PathValue $workRoot -Description "WinPE work root"
