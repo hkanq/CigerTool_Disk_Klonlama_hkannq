@@ -113,7 +113,15 @@ function Convert-ToMsysPath {
 
 function Convert-ToBashSingleQuoted {
     param([string]$Value)
-    return "'" + $Value.Replace("'", "'\"'\"'") + "'"
+    $quote = [string][char]39
+    $bashEscape = $quote + '"' + $quote + '"' + $quote
+    $segments = [regex]::Split($Value, [regex]::Escape($quote))
+    return $quote + ($segments -join $bashEscape) + $quote
+}
+
+function New-MsysScript {
+    param([string[]]$Commands)
+    return (($Commands | Where-Object { $_ -and $_.Trim() }) -join "; ")
 }
 
 function Invoke-MsysCommand {
@@ -203,17 +211,33 @@ function New-EfiBootImage {
     $msysEfiRoot = Convert-ToMsysPath $efiRoot
     $quotedImage = Convert-ToBashSingleQuoted $msysImagePath
     $quotedEfiRoot = Convert-ToBashSingleQuoted $msysEfiRoot
-    $toolchainPrefix = 'export MSYSTEM=MSYS; export PATH=/usr/bin:/mingw64/bin:$PATH; '
+    $toolchainSetup = @(
+        'export MSYSTEM=MSYS'
+        'export PATH=/usr/bin:/mingw64/bin:$PATH'
+    )
 
-    Invoke-MsysCommand -BashPath $BashPath -Description "mformat -i $msysImagePath -F -v CIGERTOOL_EFI ::" -ScriptText (
-        $toolchainPrefix + "echo `"MSYSTEM=`$MSYSTEM`"; echo `"PATH=`$PATH`"; which mformat; mformat -i $quotedImage -F -v CIGERTOOL_EFI ::"
+    $mformatScript = New-MsysScript @(
+        $toolchainSetup
+        'echo "MSYSTEM=$MSYSTEM"'
+        'echo "PATH=$PATH"'
+        'which mformat'
+        "mformat -i $quotedImage -F -v CIGERTOOL_EFI ::"
     )
-    Invoke-MsysCommand -BashPath $BashPath -Description "mmd -i $msysImagePath ::/EFI" -ScriptText (
-        $toolchainPrefix + "which mmd; mmd -i $quotedImage ::/EFI"
+    Invoke-MsysCommand -BashPath $BashPath -Description "mformat -i $msysImagePath -F -v CIGERTOOL_EFI ::" -ScriptText $mformatScript
+
+    $mmdScript = New-MsysScript @(
+        $toolchainSetup
+        'which mmd'
+        "mmd -i $quotedImage ::/EFI"
     )
-    Invoke-MsysCommand -BashPath $BashPath -Description "mcopy -i $msysImagePath -s $msysEfiRoot ::" -ScriptText (
-        $toolchainPrefix + "which mcopy; mcopy -i $quotedImage -s $quotedEfiRoot ::"
+    Invoke-MsysCommand -BashPath $BashPath -Description "mmd -i $msysImagePath ::/EFI" -ScriptText $mmdScript
+
+    $mcopyScript = New-MsysScript @(
+        $toolchainSetup
+        'which mcopy'
+        "mcopy -i $quotedImage -s $quotedEfiRoot ::"
     )
+    Invoke-MsysCommand -BashPath $BashPath -Description "mcopy -i $msysImagePath -s $msysEfiRoot ::" -ScriptText $mcopyScript
     Write-BuildLog "UEFI boot image olusturuldu: $ImagePath"
 }
 
@@ -233,10 +257,12 @@ function Build-IsoWithXorriso {
     $quotedIso = Convert-ToBashSingleQuoted $msysIsoPath
     $quotedMediaRoot = Convert-ToBashSingleQuoted $msysMediaRoot
     $quotedEfiImage = Convert-ToBashSingleQuoted $EfiImageRelativePath
-    $toolchainPrefix = 'export MSYSTEM=MSYS; export PATH=/usr/bin:/mingw64/bin:$PATH; '
-    $command = @(
-        "which xorriso",
-        "xorriso -as mkisofs",
+    $toolchainSetup = @(
+        'export MSYSTEM=MSYS'
+        'export PATH=/usr/bin:/mingw64/bin:$PATH'
+    )
+    $xorrisoCommand = @(
+        'xorriso -as mkisofs',
         "-iso-level 3",
         "-full-iso9660-filenames",
         "-volid CIGERTOOL",
@@ -254,7 +280,12 @@ function Build-IsoWithXorriso {
         "-o $quotedIso",
         $quotedMediaRoot
     ) -join " "
-    Invoke-MsysCommand -BashPath $BashPath -Description "xorriso -as mkisofs -> $msysIsoPath" -ScriptText ($toolchainPrefix + $command)
+    $xorrisoScript = New-MsysScript @(
+        $toolchainSetup
+        'which xorriso'
+        $xorrisoCommand
+    )
+    Invoke-MsysCommand -BashPath $BashPath -Description "xorriso -as mkisofs -> $msysIsoPath" -ScriptText $xorrisoScript
 }
 
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
@@ -295,9 +326,16 @@ Write-BuildLog "ADK: $adkRoot"
 Write-BuildLog "Uygulama klasoru: $appRoot"
 Write-BuildLog "Cikti ISO: $isoPath"
 Write-BuildLog "MSYS bash: $bashPath"
-Invoke-MsysCommand -BashPath $bashPath -Description "MSYS toolchain probe" -ScriptText (
-    'echo "MSYSTEM=$MSYSTEM"; export PATH=/usr/bin:/mingw64/bin:$PATH; echo "PATH=$PATH"; which xorriso; which mcopy; which mformat'
+$probeScript = New-MsysScript @(
+    'export MSYSTEM=MSYS'
+    'export PATH=/usr/bin:/mingw64/bin:$PATH'
+    'echo "MSYSTEM=$MSYSTEM"'
+    'echo "PATH=$PATH"'
+    'which xorriso'
+    'which mcopy'
+    'which mformat'
 )
+Invoke-MsysCommand -BashPath $bashPath -Description "MSYS toolchain probe" -ScriptText $probeScript
 
 if (Test-Path $workRoot) {
     Write-BuildLog "Eski calisma klasoru temizleniyor."
