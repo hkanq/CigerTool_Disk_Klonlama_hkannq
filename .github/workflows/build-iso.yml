@@ -21,8 +21,14 @@ permissions:
 jobs:
   build-iso:
     runs-on: ubuntu-24.04
+    container:
+      image: debian:testing
+      options: --privileged
     env:
       DEBIAN_FRONTEND: noninteractive
+    defaults:
+      run:
+        shell: bash
 
     steps:
       - name: Checkout
@@ -30,11 +36,12 @@ jobs:
 
       - name: Install build dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
+          apt-get update
+          apt-get install -y --no-install-recommends \
             ca-certificates \
             debootstrap \
             dosfstools \
+            git \
             grub-common \
             grub-efi-amd64-bin \
             grub-pc-bin \
@@ -49,18 +56,26 @@ jobs:
             syslinux-utils \
             xorriso
 
+      - name: Log build environment
+        run: |
+          cat /etc/os-release
+          lb --version
+          apt-cache policy live-build
+
+      - name: Install Python dependencies
+        run: python3 -m pip install --break-system-packages -r requirements.txt
+
       - name: Make scripts executable
         run: |
           chmod +x scripts/build_iso.sh
           chmod +x iso/live-build/auto/config
           chmod +x iso/live-build/config/hooks/live/0100-install-cigertool.hook.chroot
-          chmod +x iso/live-build/config/hooks/live/9999-fix-sources.hook.chroot
 
       - name: Run unit tests
         run: python3 -m unittest discover -s tests -p "test_*.py"
 
       - name: Build ISO
-        run: sudo ./scripts/build_iso.sh
+        run: ./scripts/build_iso.sh
 
       - name: Verify boot autostart files
         run: |
@@ -71,8 +86,8 @@ jobs:
           test "$(readlink iso/live-build/chroot/etc/systemd/system/getty@tty1.service)" = "/dev/null"
           grep -q "systemd.mask=getty@tty1.service" iso/live-build/auto/config
 
-      - name: Normalize artifact ownership
-        run: sudo chown -R "$(id -u):$(id -g)" dist
+      - name: Normalize artifact permissions
+        run: chmod -R a+rX dist
 
       - name: Upload ISO artifact
         uses: actions/upload-artifact@v4

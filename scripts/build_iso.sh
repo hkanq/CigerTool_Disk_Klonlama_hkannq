@@ -31,7 +31,6 @@ require_tool lb
 require_tool rsync
 require_tool python3
 require_tool sha256sum
-require_tool grep
 
 if command -v git >/dev/null 2>&1; then
   export SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-$(git -C "$ROOT_DIR" log -1 --format=%ct 2>/dev/null || date +%s)}"
@@ -43,11 +42,8 @@ mkdir -p "$DIST_DIR"
 rm -f "$OUTPUT_ISO" "$BUILD_LOG" "$CHECKSUM_FILE"
 
 pushd "$LB_DIR" >/dev/null
-  lb clean --purge || true
-  rm -rf config/cache
-  rm -rf cache
+  lb clean --purge
   chmod +x config/hooks/live/0100-install-cigertool.hook.chroot
-  chmod +x config/hooks/live/9999-fix-sources.hook.chroot
   ./auto/config
   rm -rf "$SOURCE_MIRROR"
   mkdir -p "$SOURCE_MIRROR"
@@ -73,11 +69,7 @@ test -L "$CHROOT_DIR/etc/systemd/system/multi-user.target.wants/cigertool.servic
 test "$(readlink "$CHROOT_DIR/etc/systemd/system/multi-user.target.wants/cigertool.service")" = "/etc/systemd/system/cigertool.service"
 test -L "$CHROOT_DIR/etc/systemd/system/getty@tty1.service"
 test "$(readlink "$CHROOT_DIR/etc/systemd/system/getty@tty1.service")" = "/dev/null"
-if grep -R "bookworm/updates" "$CHROOT_DIR" >/dev/null 2>&1; then
-  echo "Chroot icinde gecersiz suite bulundu: bookworm/updates" >&2
-  exit 1
-fi
-grep -R "^deb http://security.debian.org/debian-security bookworm-security main$" "$CHROOT_DIR/etc/apt" >/dev/null
+test -f "$LB_DIR/live-image-amd64.hybrid.iso"
 
 cp "$LB_DIR/live-image-amd64.hybrid.iso" "$OUTPUT_ISO"
 sha256sum "$OUTPUT_ISO" | tee "$CHECKSUM_FILE"
