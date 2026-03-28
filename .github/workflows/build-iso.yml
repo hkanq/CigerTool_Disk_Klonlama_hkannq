@@ -54,6 +54,7 @@ jobs:
           chmod +x scripts/build_iso.sh
           chmod +x iso/live-build/auto/config
           chmod +x iso/live-build/config/hooks/live/0100-install-cigertool.hook.chroot
+          chmod +x iso/live-build/config/hooks/live/9999-fix-sources.hook.chroot
 
       - name: Run unit tests
         run: python3 -m unittest discover -s tests -p "test_*.py"

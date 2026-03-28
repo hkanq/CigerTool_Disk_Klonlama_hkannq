@@ -46,6 +46,8 @@ pushd "$LB_DIR" >/dev/null
   lb clean --purge || true
   rm -rf config/cache
   rm -rf cache
+  chmod +x config/hooks/live/0100-install-cigertool.hook.chroot
+  chmod +x config/hooks/live/9999-fix-sources.hook.chroot
   ./auto/config
   rm -rf "$SOURCE_MIRROR"
   mkdir -p "$SOURCE_MIRROR"
