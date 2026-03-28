@@ -16,28 +16,14 @@ function Write-BuildLog {
     Add-Content -Path $script:LogFile -Value $line
 }
 
-function Convert-ToMsysPath {
-    param([string]$PathValue)
-    $resolved = [System.IO.Path]::GetFullPath($PathValue).Replace("\", "/")
-    if ($resolved.Length -lt 3 -or $resolved[1] -ne ":") {
-        return $resolved
+function Assert-Path {
+    param(
+        [Parameter(Mandatory = $true)][string]$PathValue,
+        [Parameter(Mandatory = $true)][string]$Description
+    )
+    if (-not (Test-Path $PathValue)) {
+        throw "$Description bulunamadi: $PathValue"
     }
-    return "/" + $resolved[0].ToString().ToLowerInvariant() + $resolved.Substring(2)
-}
-
-function Resolve-GrubBash {
-    $candidates = @(
-        $env:CIGERTOOL_GRUB_BASH,
-        "C:\msys64\usr\bin\bash.exe",
-        "C:\tools\msys64\usr\bin\bash.exe"
-    ) | Where-Object { $_ }
-
-    foreach ($candidate in $candidates) {
-        if (Test-Path $candidate) {
-            return $candidate
-        }
-    }
-    return $null
 }
 
 function Get-BcdIdentifier {
@@ -104,21 +90,57 @@ New-Item -ItemType Directory -Force -Path $artifactDir | Out-Null
 $script:LogFile = Join-Path $artifactDir "preboot-menu.log"
 Set-Content -Path $script:LogFile -Value ""
 
+$grubAssetRoot = Join-Path $projectRoot "build\assets\grub"
+$vendorGrubEfi = Join-Path $grubAssetRoot "grubx64.efi"
+$vendorBootEfi = Join-Path $grubAssetRoot "bootx64.efi"
+$vendorSupportCfg = Join-Path $grubAssetRoot "grub.cfg"
+foreach ($item in @(
+    @{ Path = $vendorGrubEfi; Description = "Prebuilt GRUB EFI binary" },
+    @{ Path = $vendorBootEfi; Description = "Prebuilt removable GRUB EFI binary" },
+    @{ Path = $vendorSupportCfg; Description = "GRUB support config" }
+)) {
+    if (-not (Test-Path $item.Path)) {
+        $message = "$($item.Description) bulunamadi: $($item.Path)"
+        if ($RequireMenu) {
+            throw $message
+        }
+        Write-BuildLog $message "WARN"
+        return $false
+    }
+}
+
 $mediaPath = (Resolve-Path $MediaRoot).Path
 $efiTargetDir = Join-Path $mediaPath "EFI\CigerTool"
+$efiBootDir = Join-Path $mediaPath "EFI\Boot"
+$efiDebianDir = Join-Path $mediaPath "EFI\debian"
+$bootGrubDir = Join-Path $mediaPath "boot\grub"
+$bootGrubArchDir = Join-Path $bootGrubDir "x86_64-efi"
 $efiTargetPath = Join-Path $efiTargetDir "grubx64.efi"
-$efiCfgTarget = Join-Path $efiTargetDir "grub.cfg"
-New-Item -ItemType Directory -Force -Path $efiTargetDir | Out-Null
-
-$bashPath = Resolve-GrubBash
-if (-not $bashPath) {
-    $message = "GRUB toolchain bulunamadi. MSYS2 MINGW64 GRUB paketi kurulu olmali veya CIGERTOOL_GRUB_BASH tanimlanmali."
-    if ($RequireMenu) {
-        throw $message
-    }
-    Write-BuildLog $message "WARN"
-    return $false
+$efiDynamicCfg = Join-Path $efiTargetDir "grub.cfg"
+$efiBootFallback = Join-Path $efiTargetDir "winpebootx64.efi"
+$efiBootPath = Join-Path $efiBootDir "bootx64.efi"
+$efiBootGrubPath = Join-Path $efiBootDir "grubx64.efi"
+$efiBootCfg = Join-Path $efiBootDir "grub.cfg"
+$efiDebianCfg = Join-Path $efiDebianDir "grub.cfg"
+$bootGrubCfg = Join-Path $bootGrubDir "grub.cfg"
+$bootGrubArchCfg = Join-Path $bootGrubArchDir "grub.cfg"
+foreach ($path in @($efiTargetDir, $efiBootDir, $efiDebianDir, $bootGrubDir, $bootGrubArchDir)) {
+    New-Item -ItemType Directory -Force -Path $path | Out-Null
 }
+
+if ((Test-Path $efiBootPath) -and -not (Test-Path $efiBootFallback)) {
+    Copy-Item -Path $efiBootPath -Destination $efiBootFallback -Force
+    Write-BuildLog "WinPE fallback bootx64.efi yedeklendi: $efiBootFallback"
+}
+
+Copy-Item -Path $vendorGrubEfi -Destination $efiTargetPath -Force
+Copy-Item -Path $vendorBootEfi -Destination $efiBootPath -Force
+Copy-Item -Path $vendorGrubEfi -Destination $efiBootGrubPath -Force
+Copy-Item -Path $vendorSupportCfg -Destination $efiBootCfg -Force
+Copy-Item -Path $vendorSupportCfg -Destination $efiDebianCfg -Force
+Copy-Item -Path $vendorSupportCfg -Destination $bootGrubCfg -Force
+Copy-Item -Path $vendorSupportCfg -Destination $bootGrubArchCfg -Force
+Write-BuildLog "Prebuilt GRUB EFI binary ve destek dosyalari medyaya kopyalandi."
 
 $wimbootSource = Resolve-Wimboot -ProjectRoot $projectRoot -MediaRoot $mediaPath
 $wimbootTarget = Join-Path $efiTargetDir "wimboot"
@@ -129,8 +151,8 @@ if ($wimbootSource -and (Test-Path $wimbootSource)) {
 }
 
 $renderScript = Join-Path $projectRoot "build\scripts\generate_grub_menu.py"
-$generatorOutput = & python $renderScript --media-root $mediaPath --output $efiCfgTarget --wimboot-path $wimbootGrubPath 2>&1 | ForEach-Object { $_.ToString() }
-if ($LASTEXITCODE -ne 0 -or -not (Test-Path $efiCfgTarget)) {
+$generatorOutput = & python $renderScript --media-root $mediaPath --output $efiDynamicCfg --wimboot-path $wimbootGrubPath 2>&1 | ForEach-Object { $_.ToString() }
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path $efiDynamicCfg)) {
     throw "Dinamik GRUB menu uretilemedi."
 }
 foreach ($line in $generatorOutput) {
@@ -138,26 +160,7 @@ foreach ($line in $generatorOutput) {
         Write-BuildLog "GRUB profil: $line"
     }
 }
-Write-BuildLog "Dinamik GRUB menu hazirlandi: $efiCfgTarget"
-
-$tempRoot = Join-Path $env:TEMP "cigertool-preboot"
-New-Item -ItemType Directory -Force -Path $tempRoot | Out-Null
-$tempEfi = Join-Path $tempRoot "grubx64.efi"
-if (Test-Path $tempEfi) {
-    Remove-Item -Force $tempEfi
-}
-
-$msysCfg = Convert-ToMsysPath $efiCfgTarget
-$msysOut = Convert-ToMsysPath $tempEfi
-$grubCommand = "export MSYSTEM=MINGW64; export PATH=/mingw64/bin:/usr/bin:`$PATH; grub-mkstandalone -O x86_64-efi -o '$msysOut' ""boot/grub/grub.cfg=$msysCfg"""
-Write-BuildLog "GRUB EFI binary olusturuluyor."
-& $bashPath -lc $grubCommand
-if ($LASTEXITCODE -ne 0 -or -not (Test-Path $tempEfi)) {
-    throw "grub-mkstandalone basarisiz oldu."
-}
-
-Copy-Item -Path $tempEfi -Destination $efiTargetPath -Force
-Write-BuildLog "GRUB EFI binary hazirlandi: $efiTargetPath"
+Write-BuildLog "Dinamik GRUB menu hazirlandi: $efiDynamicCfg"
 
 $bcdStore = Join-Path $mediaPath "EFI\Microsoft\Boot\BCD"
 $added = Add-UefiBootMenuEntry -StorePath $bcdStore -EfiRelativePath "\EFI\CigerTool\grubx64.efi"

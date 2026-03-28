@@ -18,6 +18,13 @@ class PrebootAssetsTests(unittest.TestCase):
         generator = project_root / "build" / "scripts" / "generate_grub_menu.py"
         self.assertTrue(generator.exists())
 
+    def test_prebuilt_grub_assets_exist(self) -> None:
+        project_root = Path(__file__).resolve().parents[1]
+        asset_root = project_root / "build" / "assets" / "grub"
+        self.assertTrue((asset_root / "bootx64.efi").exists())
+        self.assertTrue((asset_root / "grubx64.efi").exists())
+        self.assertTrue((asset_root / "grub.cfg").exists())
+
 
 if __name__ == "__main__":
     unittest.main()

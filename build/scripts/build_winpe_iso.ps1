@@ -65,6 +65,26 @@ function Find-ToolPath {
     return $item.FullName
 }
 
+function Resolve-MsysTool {
+    param([Parameter(Mandatory = $true)][string]$Name)
+
+    $command = Get-Command $Name -ErrorAction SilentlyContinue
+    if ($command -and $command.Source) {
+        return $command.Source
+    }
+
+    $candidates = @(
+        (Join-Path "C:\msys64\mingw64\bin" $Name),
+        (Join-Path "C:\tools\msys64\mingw64\bin" $Name)
+    )
+    foreach ($candidate in $candidates) {
+        if (Test-Path $candidate) {
+            return $candidate
+        }
+    }
+    throw "$Name bulunamadi. MSYS2 MINGW64 xorriso/mtools toolchain gerekli."
+}
+
 function Add-OptionalComponent {
     param(
         [string]$OcRoot,
@@ -94,14 +114,85 @@ function Validate-MediaLayout {
     foreach ($required in @(
         (Join-Path $MediaRoot "sources\boot.wim"),
         (Join-Path $MediaRoot "EFI\Microsoft\Boot\BCD"),
-        (Join-Path $MediaRoot "boot\bcd")
+        (Join-Path $MediaRoot "boot\bcd"),
+        (Join-Path $MediaRoot "boot\etfsboot.com"),
+        (Join-Path $MediaRoot "EFI\Boot\bootx64.efi")
     )) {
         Assert-Path -PathValue $required -Description "Gerekli medya dosyasi"
     }
 
     if ($PrebootRequired) {
         Assert-Path -PathValue (Join-Path $MediaRoot "EFI\CigerTool\grubx64.efi") -Description "Pre-boot EFI uygulamasi"
+        Assert-Path -PathValue (Join-Path $MediaRoot "EFI\CigerTool\grub.cfg") -Description "Pre-boot config"
     }
+}
+
+function New-EfiBootImage {
+    param(
+        [string]$MediaRoot,
+        [string]$ImagePath,
+        [string]$MformatPath,
+        [string]$MmdPath,
+        [string]$McopyPath
+    )
+
+    $efiRoot = Join-Path $MediaRoot "EFI"
+    Assert-Path -PathValue $efiRoot -Description "EFI klasoru"
+
+    if (Test-Path $ImagePath) {
+        Remove-Item -Force $ImagePath
+    }
+
+    $efiBytes = (Get-ChildItem -Path $efiRoot -Recurse -File | Measure-Object -Property Length -Sum).Sum
+    if (-not $efiBytes) {
+        $efiBytes = 0
+    }
+    $imageBytes = [Math]::Max(64MB, [long]([Math]::Ceiling(($efiBytes + 16MB) / 1MB) * 1MB))
+    $stream = [System.IO.File]::Open($ImagePath, [System.IO.FileMode]::Create, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+    try {
+        $stream.SetLength($imageBytes)
+    }
+    finally {
+        $stream.Dispose()
+    }
+
+    Invoke-Native -FilePath $MformatPath -Arguments @("-i", $ImagePath, "-F", "-v", "CIGERTOOL_EFI", "::")
+    Invoke-Native -FilePath $MmdPath -Arguments @("-i", $ImagePath, "::/EFI")
+    Invoke-Native -FilePath $McopyPath -Arguments @("-i", $ImagePath, "-s", (Join-Path $efiRoot "*"), "::/EFI")
+    Write-BuildLog "UEFI boot image olusturuldu: $ImagePath"
+}
+
+function Build-IsoWithXorriso {
+    param(
+        [string]$MediaRoot,
+        [string]$IsoPath,
+        [string]$EfiImageRelativePath,
+        [string]$XorrisoPath
+    )
+
+    Assert-Path -PathValue (Join-Path $MediaRoot "boot\etfsboot.com") -Description "BIOS boot image"
+    Assert-Path -PathValue (Join-Path $MediaRoot $EfiImageRelativePath.Replace("/", "\")) -Description "UEFI boot image"
+
+    $arguments = @(
+        "-as", "mkisofs",
+        "-iso-level", "3",
+        "-full-iso9660-filenames",
+        "-volid", "CIGERTOOL",
+        "-eltorito-boot", "boot/etfsboot.com",
+        "-no-emul-boot",
+        "-boot-load-size", "8",
+        "-eltorito-catalog", "boot/boot.cat",
+        "-eltorito-alt-boot",
+        "-e", $EfiImageRelativePath,
+        "-no-emul-boot",
+        "-isohybrid-gpt-basdat",
+        "-udf",
+        "-joliet-long",
+        "-relaxed-filenames",
+        "-o", $IsoPath,
+        $MediaRoot
+    )
+    Invoke-Native -FilePath $XorrisoPath -Arguments $arguments
 }
 
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
@@ -114,9 +205,13 @@ Set-Content -Path $script:LogFile -Value ""
 
 $adkRoot = Resolve-AdkRoot
 $copype = Find-ToolPath -Root $adkRoot -Name "copype.cmd"
-$makeMedia = Find-ToolPath -Root $adkRoot -Name "MakeWinPEMedia.cmd"
 $ocRoot = Join-Path $adkRoot "Windows Preinstallation Environment\amd64\WinPE_OCs"
 Assert-Path -PathValue $ocRoot -Description "WinPE optional component klasoru"
+
+$xorrisoPath = Resolve-MsysTool -Name "xorriso.exe"
+$mformatPath = Resolve-MsysTool -Name "mformat.exe"
+$mmdPath = Resolve-MsysTool -Name "mmd.exe"
+$mcopyPath = Resolve-MsysTool -Name "mcopy.exe"
 
 $appRoot = (Resolve-Path (Join-Path $projectRoot $AppBuildRoot)).Path
 Assert-Path -PathValue $appRoot -Description "PyInstaller uygulama cikti klasoru"
@@ -140,6 +235,8 @@ $commitChanges = $false
 Write-BuildLog "ADK: $adkRoot"
 Write-BuildLog "Uygulama klasoru: $appRoot"
 Write-BuildLog "Cikti ISO: $isoPath"
+Write-BuildLog "xorriso: $xorrisoPath"
+Write-BuildLog "mtools: $mformatPath"
 
 if (Test-Path $workRoot) {
     Write-BuildLog "Eski calisma klasoru temizleniyor."
@@ -232,7 +329,11 @@ catch {
 
 Validate-MediaLayout -MediaRoot $mediaRoot -PrebootRequired ([bool]$RequirePrebootMenu)
 
-Invoke-Native -FilePath "cmd.exe" -Arguments @("/c", "`"$makeMedia`" /ISO `"$workRoot`" `"$isoPath`"")
+$efiImageRelativePath = "efi/cigertool/efiboot.img"
+$efiImagePath = Join-Path $mediaRoot $efiImageRelativePath.Replace("/", "\")
+New-Item -ItemType Directory -Force -Path (Split-Path $efiImagePath -Parent) | Out-Null
+New-EfiBootImage -MediaRoot $mediaRoot -ImagePath $efiImagePath -MformatPath $mformatPath -MmdPath $mmdPath -McopyPath $mcopyPath
+Build-IsoWithXorriso -MediaRoot $mediaRoot -IsoPath $isoPath -EfiImageRelativePath $efiImageRelativePath -XorrisoPath $xorrisoPath
 Assert-Path -PathValue $isoPath -Description "ISO dosyasi"
 
 $isoItem = Get-Item $isoPath
@@ -251,6 +352,7 @@ Set-Content -Path $hashPath -Value $hash.Hash
     built_at = (Get-Date).ToString("o")
     adk_root = $adkRoot
     preboot_menu = [bool]$prebootBuilt
+    xorriso = $xorrisoPath
 } | ConvertTo-Json -Depth 3 | Set-Content -Path $metadataPath
 
 Write-BuildLog "ISO dogrulandi ve hash uretildi."
