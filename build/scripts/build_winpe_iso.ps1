@@ -12,7 +12,7 @@ function Write-BuildLog {
         [string]$Level = "INFO"
     )
     $line = "{0} [{1}] {2}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Level, $Message
-    Write-Output $line
+    Write-Host $line
     Add-Content -Path $script:LogFile -Value $line
 }
 
@@ -112,7 +112,7 @@ function Resolve-MsysBash {
                     if ($versionOutput) {
                         Write-BuildLog ("MSYS bash version: " + $versionOutput.ToString())
                     }
-                    return $resolvedEnvPath
+                    return [string]$resolvedEnvPath
                 }
                 Write-BuildLog "MSYS bash execution test: basarisiz donus kodu" "WARN"
             }
@@ -147,7 +147,7 @@ function Resolve-MsysBash {
             $null = & $resolvedCandidate --version 2>&1 | Select-Object -First 1
             if ($LASTEXITCODE -eq 0) {
                 Write-BuildLog "MSYS bash fallback execution test: basarili"
-                return $resolvedCandidate
+                return [string]$resolvedCandidate
             }
         }
         catch {
@@ -359,6 +359,16 @@ Assert-Path -PathValue $ocRoot -Description "WinPE optional component klasoru"
 
 Write-BuildLog "CIGERTOOL_MSYS_BASH env: $($env:CIGERTOOL_MSYS_BASH)"
 $bashPath = Resolve-MsysBash
+if ($bashPath -is [System.Array]) {
+    Write-BuildLog ("MSYS bash array sonucu alindi, son eleman seciliyor: {0}" -f ($bashPath.Count))
+    $bashPath = $bashPath | Select-Object -Last 1
+}
+$bashPath = [string]$bashPath
+Write-BuildLog ("MSYS bash type: {0}" -f $bashPath.GetType().FullName)
+Write-BuildLog ("MSYS bash sanitized: {0}" -f $bashPath)
+if ([string]::IsNullOrWhiteSpace($bashPath)) {
+    throw "MSYS bash yolu bos dondu."
+}
 
 $appRoot = (Resolve-Path (Join-Path $projectRoot $AppBuildRoot)).Path
 Assert-Path -PathValue $appRoot -Description "PyInstaller uygulama cikti klasoru"
