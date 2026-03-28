@@ -22,6 +22,25 @@ function Invoke-Native {
         [string[]]$Arguments = @()
     )
     Write-BuildLog ("Komut: {0} {1}" -f $FilePath, ($Arguments -join " "))
+    if ([System.IO.Path]::GetFileName($FilePath).Equals("dism.exe", [System.StringComparison]::OrdinalIgnoreCase)) {
+        $imageTarget = $Arguments | Where-Object { $_ -like "/Image:*" } | Select-Object -First 1
+        $mountTarget = $Arguments | Where-Object { $_ -like "/MountDir:*" } | Select-Object -First 1
+        $imageFile = $Arguments | Where-Object { $_ -like "/ImageFile:*" } | Select-Object -First 1
+        if ($imageTarget -or $mountTarget -or $imageFile) {
+            $imageValue = if ($imageTarget) { $imageTarget } else { "-" }
+            $mountValue = if ($mountTarget) { $mountTarget } else { "-" }
+            $imageFileValue = if ($imageFile) { $imageFile } else { "-" }
+            Write-BuildLog (
+                "DISM hedefi: mounted image | image={0} | mount={1} | imagefile={2}" -f
+                $imageValue,
+                $mountValue,
+                $imageFileValue
+            )
+        }
+        else {
+            Write-BuildLog "DISM hedefi: host"
+        }
+    }
     & $FilePath @Arguments 2>&1 | Tee-Object -FilePath $script:LogFile -Append | Out-Null
     if ($LASTEXITCODE -ne 0) {
         throw ("Komut basarisiz oldu ({0}): {1}" -f $LASTEXITCODE, $FilePath)
@@ -74,6 +93,8 @@ function Resolve-MsysTool {
     }
 
     $candidates = @(
+        (Join-Path "C:\msys64\usr\bin" $Name),
+        (Join-Path "C:\tools\msys64\usr\bin" $Name),
         (Join-Path "C:\msys64\mingw64\bin" $Name),
         (Join-Path "C:\tools\msys64\mingw64\bin" $Name)
     )

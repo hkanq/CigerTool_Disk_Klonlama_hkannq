@@ -67,8 +67,10 @@ jobs:
         run: |
           $PSVersionTable
           python --version
-          dism /English /Get-CurrentEdition
           Write-Host "MSYSTEM=$env:MSYSTEM"
+          $dism = Get-Command dism.exe -ErrorAction Stop
+          Write-Host "DISM path=$($dism.Source)"
+          Write-Host "Host OS=$([System.Environment]::OSVersion.VersionString)"
 
       - name: Debug MSYS2 toolchain
         shell: msys2 {0}
