@@ -90,7 +90,17 @@ jobs:
           which mmd
           xorriso --version || true
           mcopy -V || true
-          echo "CIGERTOOL_MSYS_BASH=$(cygpath -w "$(which bash)")" >> "$GITHUB_ENV"
+
+      - name: Export MSYS bash path
+        shell: msys2 {0}
+        run: |
+          export PATH=/usr/bin:/mingw64/bin:$PATH
+          BASH_PATH="$(command -v bash)"
+          BASH_WIN_PATH="$(cygpath -w "$BASH_PATH")"
+          ENV_FILE="$(cygpath -u "$GITHUB_ENV")"
+          echo "Resolved bash path: $BASH_PATH"
+          echo "Resolved Windows bash path: $BASH_WIN_PATH"
+          printf 'CIGERTOOL_MSYS_BASH=%s\n' "$BASH_WIN_PATH" >> "$ENV_FILE"
 
       - name: Install Python dependencies
         shell: powershell
@@ -112,6 +122,18 @@ jobs:
         shell: powershell
         run: |
           .\build\scripts\build_app.ps1
+
+      - name: Debug exported MSYS bash
+        shell: powershell
+        run: |
+          Write-Host "CIGERTOOL_MSYS_BASH=$env:CIGERTOOL_MSYS_BASH"
+          if (-not $env:CIGERTOOL_MSYS_BASH) {
+            throw "CIGERTOOL_MSYS_BASH export edilmemis."
+          }
+          if (-not (Test-Path $env:CIGERTOOL_MSYS_BASH)) {
+            throw "CIGERTOOL_MSYS_BASH yolu bulunamadi: $env:CIGERTOOL_MSYS_BASH"
+          }
+          & $env:CIGERTOOL_MSYS_BASH --version
 
       - name: Build WinPE ISO
         shell: powershell
