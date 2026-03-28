@@ -85,20 +85,76 @@ function Find-ToolPath {
 }
 
 function Resolve-MsysBash {
-    $candidates = @(
-        $env:CIGERTOOL_MSYS_BASH
-    ) | Where-Object { $_ }
+    $rawEnvPath = $env:CIGERTOOL_MSYS_BASH
+    Write-BuildLog "MSYS bash raw env: $rawEnvPath"
 
-    $command = Get-Command bash.exe -ErrorAction SilentlyContinue
-    if ($command -and $command.Source) {
-        $candidates += $command.Source
-    }
+    if (-not [string]::IsNullOrWhiteSpace($rawEnvPath)) {
+        $normalizedEnvPath = $rawEnvPath.Trim().Trim('"').Trim("'")
+        Write-BuildLog "MSYS bash normalized env: $normalizedEnvPath"
 
-    foreach ($candidate in $candidates) {
-        if (Test-Path $candidate) {
-            return $candidate
+        $exists = Test-Path -LiteralPath $normalizedEnvPath -PathType Leaf
+        Write-BuildLog "MSYS bash Test-Path(LiteralPath): $exists"
+
+        if ($exists) {
+            $resolvedEnvPath = $normalizedEnvPath
+            try {
+                $resolvedEnvPath = (Resolve-Path -LiteralPath $normalizedEnvPath).Path
+                Write-BuildLog "MSYS bash resolved env path: $resolvedEnvPath"
+            }
+            catch {
+                Write-BuildLog ("MSYS bash Resolve-Path atlandi: " + $_.Exception.Message) "WARN"
+            }
+
+            try {
+                $versionOutput = & $resolvedEnvPath --version 2>&1 | Select-Object -First 1
+                if ($LASTEXITCODE -eq 0) {
+                    Write-BuildLog "MSYS bash execution test: basarili"
+                    if ($versionOutput) {
+                        Write-BuildLog ("MSYS bash version: " + $versionOutput.ToString())
+                    }
+                    return $resolvedEnvPath
+                }
+                Write-BuildLog "MSYS bash execution test: basarisiz donus kodu" "WARN"
+            }
+            catch {
+                Write-BuildLog ("MSYS bash execution test hatasi: " + $_.Exception.Message) "WARN"
+            }
         }
     }
+
+    $fallbacks = @()
+    $command = Get-Command bash.exe -ErrorAction SilentlyContinue
+    if ($command -and $command.Source) {
+        $fallbacks += $command.Source
+    }
+
+    foreach ($candidate in $fallbacks) {
+        if ([string]::IsNullOrWhiteSpace($candidate)) {
+            continue
+        }
+        $normalizedCandidate = $candidate.Trim().Trim('"').Trim("'")
+        Write-BuildLog "MSYS bash fallback adayi: $normalizedCandidate"
+        if (-not (Test-Path -LiteralPath $normalizedCandidate -PathType Leaf)) {
+            continue
+        }
+        try {
+            $resolvedCandidate = (Resolve-Path -LiteralPath $normalizedCandidate).Path
+        }
+        catch {
+            $resolvedCandidate = $normalizedCandidate
+        }
+        try {
+            $null = & $resolvedCandidate --version 2>&1 | Select-Object -First 1
+            if ($LASTEXITCODE -eq 0) {
+                Write-BuildLog "MSYS bash fallback execution test: basarili"
+                return $resolvedCandidate
+            }
+        }
+        catch {
+            Write-BuildLog ("MSYS bash fallback execution test hatasi: " + $_.Exception.Message) "WARN"
+        }
+    }
+
     throw "MSYS2 bash bulunamadi. Workflow, msys2 shell icinden CIGERTOOL_MSYS_BASH degiskenini saglamalidir."
 }
 
