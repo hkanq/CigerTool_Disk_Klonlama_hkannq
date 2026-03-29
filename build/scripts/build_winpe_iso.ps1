@@ -676,6 +676,63 @@ function New-MsysScript {
     return (($Commands | Where-Object { $_ -and $_.Trim() }) -join "; ")
 }
 
+function Convert-WindowsPathToMsysUsingBash {
+    param(
+        [Parameter(Mandatory = $true)][string]$BashPath,
+        [Parameter(Mandatory = $true)][string]$WindowsPath,
+        [Parameter(Mandatory = $true)][string]$Description
+    )
+
+    $normalizedWindowsPath = [System.IO.Path]::GetFullPath($WindowsPath)
+    $quotedWindowsPath = Convert-ToBashSingleQuoted $normalizedWindowsPath
+    $scriptText = New-MsysScript @(
+        'export MSYSTEM=MSYS'
+        'export PATH=/usr/bin:/mingw64/bin:$PATH'
+        "cygpath -u $quotedWindowsPath"
+    )
+    $result = Invoke-MsysCommandResult -BashPath $BashPath -Description $Description -ScriptText $scriptText
+    if ($result.ExitCode -ne 0) {
+        $outputSummary = ($result.Output | Select-Object -Last 20) -join " || "
+        throw ("MSYS path donusumu basarisiz | windows_path={0} | cikti={1}" -f $normalizedWindowsPath, $outputSummary)
+    }
+
+    $resolvedMsysPath = ($result.Output | Where-Object { $_ -and $_.Trim() } | Select-Object -Last 1)
+    if ([string]::IsNullOrWhiteSpace($resolvedMsysPath)) {
+        throw ("MSYS path donusumu bos sonuc dondu: {0}" -f $normalizedWindowsPath)
+    }
+
+    $resolvedMsysPath = $resolvedMsysPath.Trim()
+    Write-BuildLog ("MSYS path donusumu | windows_path={0} | msys_path={1}" -f $normalizedWindowsPath, $resolvedMsysPath)
+    return $resolvedMsysPath
+}
+
+function Assert-MsysVisiblePath {
+    param(
+        [Parameter(Mandatory = $true)][string]$BashPath,
+        [Parameter(Mandatory = $true)][string]$MsysPath,
+        [Parameter(Mandatory = $true)][string]$Description,
+        [ValidateSet("file", "directory")][string]$PathKind = "file"
+    )
+
+    $quotedPath = Convert-ToBashSingleQuoted $MsysPath
+    $probeCommand = if ($PathKind -eq "directory") {
+        "if [ -d $quotedPath ]; then ls -ld $quotedPath; else echo MISSING:$quotedPath; exit 44; fi"
+    }
+    else {
+        "if [ -f $quotedPath ]; then ls -l $quotedPath; else echo MISSING:$quotedPath; exit 44; fi"
+    }
+    $scriptText = New-MsysScript @(
+        'export MSYSTEM=MSYS'
+        'export PATH=/usr/bin:/mingw64/bin:$PATH'
+        $probeCommand
+    )
+    $result = Invoke-MsysCommandResult -BashPath $BashPath -Description $Description -ScriptText $scriptText
+    if ($result.ExitCode -ne 0) {
+        $outputSummary = ($result.Output | Select-Object -Last 20) -join " || "
+        throw ("MSYS path preflight basarisiz | kind={0} | msys_path={1} | cikti={2}" -f $PathKind, $MsysPath, $outputSummary)
+    }
+}
+
 function Invoke-MsysCommand {
     param(
         [Parameter(Mandatory = $true)][string]$BashPath,
@@ -828,8 +885,10 @@ function New-EfiBootImage {
 
     $efiRoot = Join-Path $MediaRoot "EFI"
     Assert-Path -PathValue $efiRoot -Description "EFI klasoru"
-    $imageParent = Split-Path $ImagePath -Parent
-    Write-BuildLog ("EFI image Windows path: {0}" -f $ImagePath)
+    $efiRootWindowsPath = [System.IO.Path]::GetFullPath($efiRoot)
+    $efiImageWindowsPath = [System.IO.Path]::GetFullPath($ImagePath)
+    $imageParent = Split-Path $efiImageWindowsPath -Parent
+    Write-BuildLog ("EFI image Windows path: {0}" -f $efiImageWindowsPath)
     Write-BuildLog ("EFI image parent dizin: {0}" -f $imageParent)
     Write-BuildLog ("EFI image parent dizin mevcut mu (oncesi): {0}" -f (Test-Path -LiteralPath $imageParent -PathType Container))
     New-Item -ItemType Directory -Force -Path $imageParent | Out-Null
@@ -838,8 +897,8 @@ function New-EfiBootImage {
     }
     Write-BuildLog ("EFI image parent dizin mevcut mu (sonrasi): {0}" -f (Test-Path -LiteralPath $imageParent -PathType Container))
 
-    if (Test-Path $ImagePath) {
-        Remove-Item -Force $ImagePath
+    if (Test-Path -LiteralPath $efiImageWindowsPath) {
+        Remove-Item -LiteralPath $efiImageWindowsPath -Force
     }
 
     $sizePlan = Get-ConservativeEfiImageSizePlan -EfiRoot $efiRoot
@@ -849,9 +908,10 @@ function New-EfiBootImage {
     Write-BuildLog ("EFI ham gereksinim | file_bytes={0} | dir_overhead={1} | file_slack={2} | fat_overhead={3} | raw_required={4}" -f $sizePlan.EfiBytes, $sizePlan.DirectoryOverheadBytes, $sizePlan.FileSlackBytes, $sizePlan.FatOverheadBytes, $sizePlan.RawRequiredBytes)
     Write-BuildLog ("EFI image boyut plani | margin={0} | first_bytes={1} | first_mib={2} | retry_bytes={3} | retry_mib={4}" -f $sizePlan.SafetyMarginBytes, $sizePlan.FirstBytes, $sizePlan.FirstMiB, $sizePlan.RetryBytes, $sizePlan.RetryMiB)
 
-    $msysImagePath = Convert-ToMsysPath $ImagePath
-    $msysEfiRoot = Convert-ToMsysPath $efiRoot
+    $msysImagePath = Convert-WindowsPathToMsysUsingBash -BashPath $BashPath -WindowsPath $efiImageWindowsPath -Description "cygpath -u efiboot.img"
+    $msysEfiRoot = Convert-WindowsPathToMsysUsingBash -BashPath $BashPath -WindowsPath $efiRootWindowsPath -Description "cygpath -u EFI root"
     Write-BuildLog ("EFI image MSYS path: {0}" -f $msysImagePath)
+    Write-BuildLog ("EFI root MSYS path: {0}" -f $msysEfiRoot)
     $quotedImage = Convert-ToBashSingleQuoted $msysImagePath
     $quotedEfiRoot = Convert-ToBashSingleQuoted $msysEfiRoot
     $toolchainSetup = @(
@@ -892,10 +952,10 @@ function New-EfiBootImage {
     for ($attemptIndex = 0; $attemptIndex -lt $attemptSizes.Count; $attemptIndex++) {
         $currentImageBytes = [long]$attemptSizes[$attemptIndex]
         $currentImageMiB = [long]([Math]::Round($currentImageBytes / 1MB, 0))
-        Write-BuildLog ("EFI image olusturma denemesi | deneme={0}/{1} | image_path={2} | final_bytes={3} | final_mib={4}" -f ($attemptIndex + 1), $attemptSizes.Count, $ImagePath, $currentImageBytes, $currentImageMiB)
+        Write-BuildLog ("EFI image olusturma denemesi | deneme={0}/{1} | image_path={2} | final_bytes={3} | final_mib={4}" -f ($attemptIndex + 1), $attemptSizes.Count, $efiImageWindowsPath, $currentImageBytes, $currentImageMiB)
 
-        if (Test-Path -LiteralPath $ImagePath) {
-            Remove-Item -LiteralPath $ImagePath -Force
+        if (Test-Path -LiteralPath $efiImageWindowsPath) {
+            Remove-Item -LiteralPath $efiImageWindowsPath -Force
         }
 
         New-Item -ItemType Directory -Force -Path $imageParent | Out-Null
@@ -905,7 +965,7 @@ function New-EfiBootImage {
             throw ("EFI image parent dizin mformat oncesi eksik: {0}" -f $imageParent)
         }
 
-        $stream = [System.IO.File]::Open($ImagePath, [System.IO.FileMode]::Create, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+        $stream = [System.IO.File]::Open($efiImageWindowsPath, [System.IO.FileMode]::Create, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
         try {
             $stream.SetLength($currentImageBytes)
         }
@@ -913,15 +973,20 @@ function New-EfiBootImage {
             $stream.Dispose()
         }
 
-        $imageExists = Test-Path -LiteralPath $ImagePath -PathType Leaf
-        $actualImageLength = if ($imageExists) { (Get-Item -LiteralPath $ImagePath).Length } else { -1 }
+        $imageExists = Test-Path -LiteralPath $efiImageWindowsPath -PathType Leaf
+        $actualImageLength = if ($imageExists) { (Get-Item -LiteralPath $efiImageWindowsPath).Length } else { -1 }
         Write-BuildLog ("EFI image dosya durumu | deneme={0} | exists={1} | size_bytes={2}" -f ($attemptIndex + 1), $imageExists, $actualImageLength)
         if (-not $imageExists) {
-            throw ("EFI image dosyasi mformat oncesi bulunamadi: {0}" -f $ImagePath)
+            throw ("EFI image dosyasi mformat oncesi bulunamadi: {0}" -f $efiImageWindowsPath)
         }
         if ($actualImageLength -ne $currentImageBytes) {
-            throw ("EFI image dosya boyutu beklenenle eslesmiyor | path={0} | actual={1} | expected={2}" -f $ImagePath, $actualImageLength, $currentImageBytes)
+            throw ("EFI image dosya boyutu beklenenle eslesmiyor | path={0} | actual={1} | expected={2}" -f $efiImageWindowsPath, $actualImageLength, $currentImageBytes)
         }
+        if ($actualImageLength -le 0) {
+            throw ("EFI image dosya boyutu sifir veya negatif | path={0} | actual={1}" -f $efiImageWindowsPath, $actualImageLength)
+        }
+
+        Assert-MsysVisiblePath -BashPath $BashPath -MsysPath $msysImagePath -Description ("MSYS preflight ls -l efiboot.img deneme {0}" -f ($attemptIndex + 1)) -PathKind file
 
         Invoke-MsysCommand -BashPath $BashPath -Description "mformat -i $msysImagePath -F -v CIGERTOOL_EFI ::" -ScriptText $mformatScript
         Invoke-MsysCommand -BashPath $BashPath -Description "mmd -i $msysImagePath ::/EFI" -ScriptText $mmdScript
@@ -930,12 +995,12 @@ function New-EfiBootImage {
         $lastMcopyOutputSummary = ($mcopyResult.Output | Select-Object -Last 50) -join " || "
         if ($mcopyResult.ExitCode -eq 0) {
             $imageCreated = $true
-            Write-BuildLog ("UEFI boot image olusturuldu | image_path={0} | final_bytes={1} | final_mib={2}" -f $ImagePath, $currentImageBytes, $currentImageMiB)
+            Write-BuildLog ("UEFI boot image olusturuldu | image_path={0} | final_bytes={1} | final_mib={2}" -f $efiImageWindowsPath, $currentImageBytes, $currentImageMiB)
             break
         }
 
         $lastEfiError = "MSYS komut basarisiz oldu ({0}): {1} | cikti={2}" -f $mcopyResult.ExitCode, "mcopy -i $msysImagePath -s $msysEfiRoot ::", $lastMcopyOutputSummary
-        Write-BuildLog ("EFI mcopy hatasi | deneme={0} | image_path={1} | final_bytes={2} | exit_code={3} | cikti={4}" -f ($attemptIndex + 1), $ImagePath, $currentImageBytes, $mcopyResult.ExitCode, $lastMcopyOutputSummary) "WARN"
+        Write-BuildLog ("EFI mcopy hatasi | deneme={0} | image_path={1} | final_bytes={2} | exit_code={3} | cikti={4}" -f ($attemptIndex + 1), $efiImageWindowsPath, $currentImageBytes, $mcopyResult.ExitCode, $lastMcopyOutputSummary) "WARN"
         $isDiskFull = $lastMcopyOutputSummary -match '(?i)disk full'
         if ($isDiskFull -and $attemptIndex -lt ($attemptSizes.Count - 1)) {
             Write-BuildLog ("EFI image kopyasi disk full nedeniyle yeniden daha buyuk boyutla denenecek | ilk_bytes={0} | retry_bytes={1}" -f $sizePlan.FirstBytes, $sizePlan.RetryBytes) "WARN"
