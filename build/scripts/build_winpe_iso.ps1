@@ -30,7 +30,9 @@ function Normalize-ExternalOutputLine {
         return ""
     }
 
-    return $text.Replace([string][char]0, "").TrimEnd("`r", "`n")
+    $normalized = $text.Replace([string][char]0, "")
+    $normalized = $normalized.TrimStart([char]0xFEFF, [char]0xFFFD)
+    return $normalized.TrimEnd("`r", "`n")
 }
 
 function Read-ExternalOutputFile {
@@ -47,11 +49,17 @@ function Read-ExternalOutputFile {
         return @()
     }
 
-    $text = if ($bytes.Length -ge 2 -and $bytes[1] -eq 0) {
+    $text = if ($bytes.Length -ge 2 -and $bytes[0] -eq 0xFF -and $bytes[1] -eq 0xFE) {
         [System.Text.Encoding]::Unicode.GetString($bytes)
     }
-    elseif ($bytes.Length -ge 2 -and $bytes[0] -eq 0) {
+    elseif ($bytes.Length -ge 2 -and $bytes[0] -eq 0xFE -and $bytes[1] -eq 0xFF) {
         [System.Text.Encoding]::BigEndianUnicode.GetString($bytes)
+    }
+    elseif ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) {
+        [System.Text.Encoding]::UTF8.GetString($bytes)
+    }
+    elseif ($bytes.Length -ge 4 -and ($bytes | Where-Object { $_ -eq 0 }).Count -ge 1) {
+        [System.Text.Encoding]::Unicode.GetString($bytes)
     }
     else {
         [System.Text.Encoding]::UTF8.GetString($bytes)
@@ -78,7 +86,7 @@ function Test-IsLikelyMsysPath {
         return $false
     }
 
-    $candidate = $PathValue.Trim()
+    $candidate = $PathValue.Trim().TrimStart([char]0xFEFF, [char]0xFFFD)
     if (-not $candidate.StartsWith("/")) {
         return $false
     }
@@ -91,6 +99,9 @@ function Test-IsLikelyMsysPath {
     if ($candidate -match '[\"\'']') {
         return $false
     }
+    if ($candidate -match '[^\x20-\x7E]') {
+        return $false
+    }
 
     return $true
 }
@@ -101,7 +112,8 @@ function Assert-ValidMsysPathValue {
         [Parameter(Mandatory = $true)][string]$Label
     )
 
-    if (-not (Test-IsLikelyMsysPath -PathValue $PathValue)) {
+    $candidate = $PathValue.Trim().TrimStart([char]0xFEFF, [char]0xFFFD)
+    if (-not (Test-IsLikelyMsysPath -PathValue $candidate)) {
         throw ("Invalid MSYS path conversion result for {0}: {1}" -f $Label, $PathValue)
     }
 }
@@ -789,7 +801,7 @@ function Convert-WindowsPathToMsysUsingBash {
     $stdoutLines = @(
         $result.Stdout |
         Where-Object { $_ -and $_.Trim() } |
-        ForEach-Object { $_.Trim() }
+        ForEach-Object { $_.Trim().TrimStart([char]0xFEFF, [char]0xFFFD) }
     )
     $stderrSummary = ($result.Stderr | Select-Object -Last 20) -join " || "
     Write-BuildLog ("[result] MSYS path donusumu stdout satirlari | windows_path={0} | count={1}" -f $normalizedWindowsPath, $stdoutLines.Count)
@@ -804,7 +816,7 @@ function Convert-WindowsPathToMsysUsingBash {
         throw ("Invalid MSYS path conversion result for {0}: {1}" -f $Description, $stdoutSummary)
     }
 
-    $resolvedMsysPath = $resolvedMsysPath.Trim()
+    $resolvedMsysPath = $resolvedMsysPath.Trim().TrimStart([char]0xFEFF, [char]0xFFFD)
     Assert-ValidMsysPathValue -PathValue $resolvedMsysPath -Label $Description
     Write-BuildLog ("[result] MSYS path donusumu | windows_path={0} | msys_path={1} | valid={2}" -f $normalizedWindowsPath, $resolvedMsysPath, $true)
     return $resolvedMsysPath
