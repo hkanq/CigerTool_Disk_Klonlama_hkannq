@@ -1034,11 +1034,29 @@ function Build-IsoWithXorriso {
         [string]$EfiImageRelativePath
     )
 
-    Assert-Path -PathValue (Join-Path $MediaRoot "boot\etfsboot.com") -Description "BIOS boot image"
-    Assert-Path -PathValue (Join-Path $MediaRoot $EfiImageRelativePath.Replace("/", "\")) -Description "UEFI boot image"
+    $mediaRootWindowsPath = [System.IO.Path]::GetFullPath($MediaRoot)
+    $isoWindowsPath = [System.IO.Path]::GetFullPath($IsoPath)
+    $efiImageWindowsPath = [System.IO.Path]::GetFullPath((Join-Path $MediaRoot $EfiImageRelativePath.Replace("/", "\")))
+    $isoParent = Split-Path $isoWindowsPath -Parent
 
-    $msysMediaRoot = Convert-ToMsysPath $MediaRoot
-    $msysIsoPath = Convert-ToMsysPath $IsoPath
+    Assert-Path -PathValue (Join-Path $mediaRootWindowsPath "boot\etfsboot.com") -Description "BIOS boot image"
+    Assert-Path -PathValue $efiImageWindowsPath -Description "UEFI boot image"
+    New-Item -ItemType Directory -Force -Path $isoParent | Out-Null
+    Assert-Path -PathValue $isoParent -Description "ISO hedef klasoru"
+
+    $msysMediaRoot = Convert-WindowsPathToMsysUsingBash -BashPath $BashPath -WindowsPath $mediaRootWindowsPath -Description "cygpath -u media root"
+    $msysIsoPath = Convert-WindowsPathToMsysUsingBash -BashPath $BashPath -WindowsPath $isoWindowsPath -Description "cygpath -u ISO output"
+    $msysEfiImagePath = Convert-WindowsPathToMsysUsingBash -BashPath $BashPath -WindowsPath $efiImageWindowsPath -Description "cygpath -u final efiboot.img"
+    Write-BuildLog ("xorriso media root Windows path: {0}" -f $mediaRootWindowsPath)
+    Write-BuildLog ("xorriso ISO Windows path: {0}" -f $isoWindowsPath)
+    Write-BuildLog ("xorriso UEFI image Windows path: {0}" -f $efiImageWindowsPath)
+    Write-BuildLog ("xorriso media root MSYS path: {0}" -f $msysMediaRoot)
+    Write-BuildLog ("xorriso ISO MSYS path: {0}" -f $msysIsoPath)
+    Write-BuildLog ("xorriso UEFI image MSYS path: {0}" -f $msysEfiImagePath)
+
+    Assert-MsysVisiblePath -BashPath $BashPath -MsysPath $msysMediaRoot -Description "MSYS preflight media root" -PathKind directory
+    Assert-MsysVisiblePath -BashPath $BashPath -MsysPath $msysEfiImagePath -Description "MSYS preflight final efiboot.img" -PathKind file
+
     $quotedIso = Convert-ToBashSingleQuoted $msysIsoPath
     $quotedMediaRoot = Convert-ToBashSingleQuoted $msysMediaRoot
     $quotedEfiImage = Convert-ToBashSingleQuoted $EfiImageRelativePath
