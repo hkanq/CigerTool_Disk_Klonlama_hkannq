@@ -1295,8 +1295,17 @@ Validate-MediaLayout -MediaRoot $mediaRoot -PrebootRequired ([bool]$RequirePrebo
 
 $efiImageRelativePath = "efi/cigertool/efiboot.img"
 $efiImagePath = Join-Path $mediaRoot $efiImageRelativePath.Replace("/", "\")
+$efiImageBuildPath = Join-Path $workRoot "staging\efiboot.img"
+Write-BuildLog ("EFI image gecici build path: {0}" -f $efiImageBuildPath)
+Write-BuildLog ("EFI image final media path: {0}" -f $efiImagePath)
+New-Item -ItemType Directory -Force -Path (Split-Path $efiImageBuildPath -Parent) | Out-Null
 New-Item -ItemType Directory -Force -Path (Split-Path $efiImagePath -Parent) | Out-Null
-New-EfiBootImage -BashPath $bashPath -MediaRoot $mediaRoot -ImagePath $efiImagePath
+if (Test-Path -LiteralPath $efiImagePath) {
+    Remove-Item -LiteralPath $efiImagePath -Force
+}
+New-EfiBootImage -BashPath $bashPath -MediaRoot $mediaRoot -ImagePath $efiImageBuildPath
+Copy-Item -LiteralPath $efiImageBuildPath -Destination $efiImagePath -Force
+Assert-Path -PathValue $efiImagePath -Description "Final UEFI boot image"
 Build-IsoWithXorriso -BashPath $bashPath -MediaRoot $mediaRoot -IsoPath $isoPath -EfiImageRelativePath $efiImageRelativePath
 Assert-Path -PathValue $isoPath -Description "ISO dosyasi"
 
