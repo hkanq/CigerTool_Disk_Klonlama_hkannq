@@ -763,7 +763,7 @@ function Convert-ToBashSingleQuoted {
 
 function New-MsysScript {
     param([string[]]$Commands)
-    return (($Commands | Where-Object { $_ -and $_.Trim() }) -join "; ")
+    return (($Commands | Where-Object { $_ -and $_.Trim() }) -join "`n")
 }
 
 function Convert-WindowsPathToMsysUsingBash {
@@ -879,20 +879,31 @@ function Invoke-MsysCommandResult {
         'exit "$__CT_EXIT_CODE__"'
     ) -join "`n"
     $bashArguments = @("--noprofile", "--norc", "-c", $wrappedScript)
+    $scriptPreview = $wrappedScript
+    if ($scriptPreview.Length -gt 200) {
+        $scriptPreview = $scriptPreview.Substring(0, 200)
+    }
+    $scriptPreview = $scriptPreview.Replace("`r", "\r").Replace("`n", "\n")
     Write-BuildLog ("MSYS bash path: {0}" -f $BashPath)
+    Write-BuildLog ("MSYS bash script length: {0}" -f $wrappedScript.Length)
+    Write-BuildLog ("MSYS bash script preview: {0}" -f $scriptPreview)
     Write-BuildLog ("MSYS bash args: {0}" -f (($bashArguments | ForEach-Object {
-        if ($_ -match '\s') { '"' + $_ + '"' } else { $_ }
+        if ($_ -eq $wrappedScript) {
+            '<script>'
+        }
+        elseif ($_ -match '\s') { '"' + $_ + '"' } else { $_ }
     }) -join " "))
 
     try {
-        $process = Start-Process -FilePath $BashPath `
-            -ArgumentList $bashArguments `
-            -WorkingDirectory (Get-Location).Path `
-            -Wait `
-            -PassThru `
-            -NoNewWindow `
-            -RedirectStandardOutput $stdoutFile `
-            -RedirectStandardError $stderrFile
+        $previousLocation = Get-Location
+        try {
+            Set-Location -LiteralPath $previousLocation.Path
+            & $BashPath --noprofile --norc -c $wrappedScript 1> $stdoutFile 2> $stderrFile
+            $nativeExitCode = $LASTEXITCODE
+        }
+        finally {
+            Set-Location -LiteralPath $previousLocation.Path
+        }
 
         $stdoutLines = @(Read-ExternalOutputFile -Path $stdoutFile)
         $stderrLines = @(Read-ExternalOutputFile -Path $stderrFile)
@@ -915,14 +926,14 @@ function Invoke-MsysCommandResult {
         }
         Write-BuildLog ("[result] MSYS exit marker found: {0}" -f $markerFound)
         Write-BuildLog ("[result] MSYS exit code: {0}" -f $capturedExitCode)
-        Write-BuildLog ("[result] MSYS bash process exit code: {0}" -f $process.ExitCode)
+        Write-BuildLog ("[result] MSYS native exit code: {0}" -f $nativeExitCode)
 
         return [pscustomobject]@{
             ExitCode     = $capturedExitCode
             Output       = @($stdoutLines + $stderrLines)
             Stdout       = $stdoutLines
             Stderr       = $stderrLines
-            BashExitCode = $process.ExitCode
+            BashExitCode = $nativeExitCode
             MarkerFound  = $markerFound
         }
     }
