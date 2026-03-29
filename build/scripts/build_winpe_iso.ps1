@@ -69,6 +69,43 @@ function Read-ExternalOutputFile {
     )
 }
 
+function Test-IsLikelyMsysPath {
+    param(
+        [AllowNull()][string]$PathValue
+    )
+
+    if ([string]::IsNullOrWhiteSpace($PathValue)) {
+        return $false
+    }
+
+    $candidate = $PathValue.Trim()
+    if (-not $candidate.StartsWith("/")) {
+        return $false
+    }
+    if ($candidate -match 'declare\s+-x') {
+        return $false
+    }
+    if ($candidate -match '=') {
+        return $false
+    }
+    if ($candidate -match '[\"\'']') {
+        return $false
+    }
+
+    return $true
+}
+
+function Assert-ValidMsysPathValue {
+    param(
+        [Parameter(Mandatory = $true)][string]$PathValue,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+
+    if (-not (Test-IsLikelyMsysPath -PathValue $PathValue)) {
+        throw ("Invalid MSYS path conversion result for {0}: {1}" -f $Label, $PathValue)
+    }
+}
+
 function Invoke-Native {
     param(
         [Parameter(Mandatory = $true)][string]$FilePath,
@@ -749,13 +786,27 @@ function Convert-WindowsPathToMsysUsingBash {
         throw ("MSYS path donusumu basarisiz | windows_path={0} | cikti={1}" -f $normalizedWindowsPath, $outputSummary)
     }
 
-    $resolvedMsysPath = ($result.Output | Where-Object { $_ -and $_.Trim() } | Select-Object -Last 1)
+    $stdoutLines = @(
+        $result.Stdout |
+        Where-Object { $_ -and $_.Trim() } |
+        ForEach-Object { $_.Trim() }
+    )
+    $stderrSummary = ($result.Stderr | Select-Object -Last 20) -join " || "
+    Write-BuildLog ("[result] MSYS path donusumu stdout satirlari | windows_path={0} | count={1}" -f $normalizedWindowsPath, $stdoutLines.Count)
+    if (-not [string]::IsNullOrWhiteSpace($stderrSummary)) {
+        Write-BuildLog ("[result] MSYS path donusumu stderr ozeti | windows_path={0} | stderr={1}" -f $normalizedWindowsPath, $stderrSummary) "WARN"
+    }
+
+    $validPathLines = @($stdoutLines | Where-Object { Test-IsLikelyMsysPath -PathValue $_ })
+    $resolvedMsysPath = $validPathLines | Select-Object -Last 1
     if ([string]::IsNullOrWhiteSpace($resolvedMsysPath)) {
-        throw ("MSYS path donusumu bos sonuc dondu: {0}" -f $normalizedWindowsPath)
+        $stdoutSummary = ($stdoutLines -join " || ")
+        throw ("Invalid MSYS path conversion result for {0}: {1}" -f $Description, $stdoutSummary)
     }
 
     $resolvedMsysPath = $resolvedMsysPath.Trim()
-    Write-BuildLog ("MSYS path donusumu | windows_path={0} | msys_path={1}" -f $normalizedWindowsPath, $resolvedMsysPath)
+    Assert-ValidMsysPathValue -PathValue $resolvedMsysPath -Label $Description
+    Write-BuildLog ("[result] MSYS path donusumu | windows_path={0} | msys_path={1} | valid={2}" -f $normalizedWindowsPath, $resolvedMsysPath, $true)
     return $resolvedMsysPath
 }
 
@@ -820,7 +871,7 @@ function Invoke-MsysCommandResult {
 
     try {
         $process = Start-Process -FilePath $BashPath `
-            -ArgumentList @("-lc", $ScriptText) `
+            -ArgumentList @("--noprofile", "--norc", "-c", $ScriptText) `
             -WorkingDirectory (Get-Location).Path `
             -Wait `
             -PassThru `
@@ -983,8 +1034,11 @@ function New-EfiBootImage {
 
     $msysImagePath = Convert-WindowsPathToMsysUsingBash -BashPath $BashPath -WindowsPath $efiImageWindowsPath -Description "cygpath -u efiboot.img"
     $msysEfiRoot = Convert-WindowsPathToMsysUsingBash -BashPath $BashPath -WindowsPath $efiRootWindowsPath -Description "cygpath -u EFI root"
+    Assert-ValidMsysPathValue -PathValue $msysImagePath -Label "efiboot.img"
+    Assert-ValidMsysPathValue -PathValue $msysEfiRoot -Label "EFI root"
     Write-BuildLog ("EFI image MSYS path: {0}" -f $msysImagePath)
     Write-BuildLog ("EFI root MSYS path: {0}" -f $msysEfiRoot)
+    Write-BuildLog ("EFI mtools final MSYS pathleri | efiboot={0} | efi_root={1}" -f $msysImagePath, $msysEfiRoot)
     $quotedImage = Convert-ToBashSingleQuoted $msysImagePath
     $quotedEfiRoot = Convert-ToBashSingleQuoted $msysEfiRoot
     $toolchainSetup = @(
@@ -1125,6 +1179,15 @@ function Build-IsoWithXorriso {
     $msysEfiImagePath = Convert-WindowsPathToMsysUsingBash -BashPath $BashPath -WindowsPath $efiImageWindowsPath -Description "cygpath -u final efiboot.img"
     $msysBiosBootPath = Convert-WindowsPathToMsysUsingBash -BashPath $BashPath -WindowsPath $biosBootWindowsPath -Description "cygpath -u BIOS boot image"
     $msysBootWimPath = Convert-WindowsPathToMsysUsingBash -BashPath $BashPath -WindowsPath $bootWimWindowsPath -Description "cygpath -u boot.wim"
+    foreach ($resolvedPath in @(
+        @{ Label = "media root"; Value = $msysMediaRoot },
+        @{ Label = "ISO output"; Value = $msysIsoPath },
+        @{ Label = "final efiboot.img"; Value = $msysEfiImagePath },
+        @{ Label = "BIOS boot image"; Value = $msysBiosBootPath },
+        @{ Label = "boot.wim"; Value = $msysBootWimPath }
+    )) {
+        Assert-ValidMsysPathValue -PathValue ([string]$resolvedPath.Value) -Label ([string]$resolvedPath.Label)
+    }
     Write-BuildLog ("xorriso media root Windows path: {0}" -f $mediaRootWindowsPath)
     Write-BuildLog ("xorriso ISO Windows path: {0}" -f $isoWindowsPath)
     Write-BuildLog ("xorriso UEFI image Windows path: {0}" -f $efiImageWindowsPath)
@@ -1135,6 +1198,7 @@ function Build-IsoWithXorriso {
     Write-BuildLog ("xorriso UEFI image MSYS path: {0}" -f $msysEfiImagePath)
     Write-BuildLog ("xorriso BIOS image MSYS path: {0}" -f $msysBiosBootPath)
     Write-BuildLog ("xorriso boot.wim MSYS path: {0}" -f $msysBootWimPath)
+    Write-BuildLog ("xorriso final MSYS pathleri | media={0} | iso={1} | efiboot={2} | bios={3} | bootwim={4}" -f $msysMediaRoot, $msysIsoPath, $msysEfiImagePath, $msysBiosBootPath, $msysBootWimPath)
     Write-BuildLog ("xorriso input existence | media_root={0} | efiboot={1} | etfsboot={2} | bootwim={3} | iso_parent={4}" -f
         (Test-Path -LiteralPath $mediaRootWindowsPath -PathType Container),
         (Test-Path -LiteralPath $efiImageWindowsPath -PathType Leaf),
