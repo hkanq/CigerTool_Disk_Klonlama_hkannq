@@ -869,8 +869,7 @@ function Invoke-MsysCommand {
     if ($PassThruOutput) {
         return $result
     }
-
-    return $result
+    return
 }
 
 function Invoke-MsysCommandResult {
@@ -921,14 +920,21 @@ function Invoke-MsysCommandResult {
         $stderrLines = @(Read-ExternalOutputFile -Path $stderrFile)
         $exitCodeLine = $stdoutLines | Where-Object { $_ -match '^__CT_EXIT_CODE__:(-?\d+)$' } | Select-Object -Last 1
         $markerFound = -not [string]::IsNullOrWhiteSpace($exitCodeLine)
-        if (-not $exitCodeLine) {
+        if ($markerFound) {
+            $capturedExitCode = [int]([regex]::Match($exitCodeLine, '^__CT_EXIT_CODE__:(-?\d+)$').Groups[1].Value)
+            $stdoutLines = @($stdoutLines | Where-Object { $_ -notmatch '^__CT_EXIT_CODE__:(-?\d+)$' })
+        }
+        elseif ($null -ne $nativeExitCode) {
+            $capturedExitCode = [int]$nativeExitCode
+            $stdoutSummary = ($stdoutLines | Select-Object -Last 50) -join " || "
+            $stderrSummary = ($stderrLines | Select-Object -Last 50) -join " || "
+            Write-BuildLog ("[warn] MSYS exit marker bulunamadi, native exit code fallback kullaniliyor | description={0} | native_exit={1} | stdout={2} | stderr={3}" -f $Description, $capturedExitCode, $stdoutSummary, $stderrSummary) "WARN"
+        }
+        else {
             $stdoutSummary = ($stdoutLines | Select-Object -Last 50) -join " || "
             $stderrSummary = ($stderrLines | Select-Object -Last 50) -join " || "
             throw ("MSYS komut gercek cikis kodunu raporlamadi: {0} | stdout={1} | stderr={2}" -f $Description, $stdoutSummary, $stderrSummary)
         }
-
-        $capturedExitCode = [int]([regex]::Match($exitCodeLine, '^__CT_EXIT_CODE__:(-?\d+)$').Groups[1].Value)
-        $stdoutLines = @($stdoutLines | Where-Object { $_ -notmatch '^__CT_EXIT_CODE__:(-?\d+)$' })
 
         foreach ($line in $stdoutLines) {
             Write-BuildLog ("[stdout] {0}" -f $line)
