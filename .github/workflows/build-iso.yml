@@ -159,11 +159,14 @@ jobs:
           if (-not (Test-Path $logPath)) {
             Write-Host "Build log bulunamadi: $logPath"
             "Build log bulunamadi: $logPath" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            Write-Output "::error title=WinPE build log::Build log bulunamadi: $logPath"
             exit 0
           }
           $tail = Get-Content $logPath -Tail 200
+          $annotationTail = (($tail | Select-Object -Last 20) -join " | ").Replace("`r", " ").Replace("`n", " ")
           Write-Host "===== WINPE BUILD LOG TAIL ====="
           $tail | ForEach-Object { Write-Host $_ }
+          Write-Output "::error title=WinPE build log tail::$annotationTail"
           @(
             "## WinPE Build Log Tail"
             ""
