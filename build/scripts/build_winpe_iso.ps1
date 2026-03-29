@@ -135,14 +135,22 @@ function Copy-DirectoryContents {
         [Parameter(Mandatory = $true)][string]$Description
     )
 
-    Assert-Path -PathValue $SourcePath -Description $Description
-    New-Item -ItemType Directory -Force -Path $DestinationPath | Out-Null
-    $items = @(Get-ChildItem -LiteralPath $SourcePath -Force -ErrorAction Stop)
-    foreach ($item in $items) {
-        Copy-Item -LiteralPath $item.FullName -Destination $DestinationPath -Recurse -Force
+    Write-BuildLog ("Kopya hazirlaniyor | {0} | kaynak={1} | hedef={2}" -f $Description, $SourcePath, $DestinationPath)
+    try {
+        Assert-Path -PathValue $SourcePath -Description $Description
+        New-Item -ItemType Directory -Force -Path $DestinationPath | Out-Null
+        $items = @(Get-ChildItem -LiteralPath $SourcePath -Force -ErrorAction Stop)
+        foreach ($item in $items) {
+            Write-BuildLog ("Kopyalaniyor | {0} | oge={1}" -f $Description, $item.FullName)
+            Copy-Item -LiteralPath $item.FullName -Destination $DestinationPath -Recurse -Force
+        }
     }
+    catch {
+        throw ("Kopya basarisiz | {0} | kaynak={1} | hedef={2} | hata={3}" -f $Description, $SourcePath, $DestinationPath, $_.Exception.Message)
+    }
+
     Write-BuildLog (
-        "{0} kopyalandi: {1} -> {2} ({3} oge)" -f
+        "Kopya tamamlandi | {0} | kaynak={1} | hedef={2} | oge_sayisi={3}" -f
         $Description,
         $SourcePath,
         $DestinationPath,
@@ -339,64 +347,116 @@ function Stage-WinPeWorkspaceManually {
     $destinationMediaRoot = Join-Path $WorkRoot "media"
     $destinationFwfilesRoot = Join-Path $WorkRoot "fwfiles"
     $destinationMountRoot = Join-Path $WorkRoot "mount"
+    $lastManualStep = "baslangic"
 
     Write-BuildLog "copype tum denemelerde basarisiz oldu. Manual WinPE staging baslatiliyor." "WARN"
     Write-BuildLog ("Manual staging kaynak mimari koku: {0}" -f $ArchitectureRoot)
     Write-BuildLog ("Manual staging kaynak Media: {0}" -f $SourceMediaRoot)
     Write-BuildLog ("Manual staging hedef work root: {0}" -f $WorkRoot)
+    Write-BuildLog ("Manual staging hedef media root: {0}" -f $destinationMediaRoot)
+    Write-BuildLog ("Manual staging hedef fwfiles root: {0}" -f $destinationFwfilesRoot)
+    Write-BuildLog ("Manual staging hedef mount root: {0}" -f $destinationMountRoot)
 
-    if (Test-Path -LiteralPath $WorkRoot) {
-        Write-BuildLog "Manual staging oncesi mevcut work root temizleniyor."
-        Remove-Item -LiteralPath $WorkRoot -Recurse -Force
-    }
+    try {
+        $lastManualStep = "work root temizleme"
+        if (Test-Path -LiteralPath $WorkRoot) {
+            Write-BuildLog "Manual staging oncesi mevcut work root temizleniyor."
+            Remove-Item -LiteralPath $WorkRoot -Recurse -Force
+            Write-BuildLog "Manual staging mevcut work root temizlendi."
+        }
 
-    New-Item -ItemType Directory -Force -Path $WorkRoot | Out-Null
-    New-Item -ItemType Directory -Force -Path $destinationFwfilesRoot | Out-Null
-    New-Item -ItemType Directory -Force -Path $destinationMountRoot | Out-Null
+        $lastManualStep = "hedef dizinleri olusturma"
+        New-Item -ItemType Directory -Force -Path $WorkRoot | Out-Null
+        Write-BuildLog ("Olusturuldu: {0}" -f $WorkRoot)
+        New-Item -ItemType Directory -Force -Path $destinationFwfilesRoot | Out-Null
+        Write-BuildLog ("Olusturuldu: {0}" -f $destinationFwfilesRoot)
+        New-Item -ItemType Directory -Force -Path $destinationMountRoot | Out-Null
+        Write-BuildLog ("Olusturuldu: {0}" -f $destinationMountRoot)
 
-    Copy-DirectoryContents -SourcePath $SourceMediaRoot -DestinationPath $destinationMediaRoot -Description "WinPE Media payload"
+        $lastManualStep = "Media payload kopyalama"
+        Copy-DirectoryContents -SourcePath $SourceMediaRoot -DestinationPath $destinationMediaRoot -Description "WinPE Media payload"
 
-    $fwSource = Join-Path $ArchitectureRoot "fwfiles"
-    if (Test-Path -LiteralPath $fwSource -PathType Container) {
-        Copy-DirectoryContents -SourcePath $fwSource -DestinationPath $destinationFwfilesRoot -Description "WinPE fwfiles payload"
-    }
-    else {
-        Write-BuildLog "Kaynakta ayri bir fwfiles klasoru yok; media icindeki boot dosyalariyla fwfiles iskeleti olusturuluyor." "WARN"
-        foreach ($seed in @(
-            @{ Source = (Join-Path $destinationMediaRoot "boot"); Destination = (Join-Path $destinationFwfilesRoot "boot"); Label = "fwfiles boot tohumu" },
-            @{ Source = (Join-Path $destinationMediaRoot "EFI"); Destination = (Join-Path $destinationFwfilesRoot "EFI"); Label = "fwfiles EFI tohumu" }
-        )) {
-            if (Test-Path -LiteralPath $seed.Source -PathType Container) {
-                Copy-DirectoryContents -SourcePath $seed.Source -DestinationPath $seed.Destination -Description $seed.Label
+        $lastManualStep = "fwfiles payload hazirlama"
+        $fwSource = Join-Path $ArchitectureRoot "fwfiles"
+        Write-BuildLog ("fwfiles kaynak adayi: {0}" -f $fwSource)
+        if (Test-Path -LiteralPath $fwSource -PathType Container) {
+            Copy-DirectoryContents -SourcePath $fwSource -DestinationPath $destinationFwfilesRoot -Description "WinPE fwfiles payload"
+        }
+        else {
+            Write-BuildLog "Kaynakta ayri bir fwfiles klasoru yok; media icindeki boot dosyalariyla fwfiles iskeleti olusturuluyor." "WARN"
+            foreach ($seed in @(
+                @{ Source = (Join-Path $destinationMediaRoot "boot"); Destination = (Join-Path $destinationFwfilesRoot "boot"); Label = "fwfiles boot tohumu" },
+                @{ Source = (Join-Path $destinationMediaRoot "EFI"); Destination = (Join-Path $destinationFwfilesRoot "EFI"); Label = "fwfiles EFI tohumu" }
+            )) {
+                Write-BuildLog ("fwfiles tohum kontrolu | kaynak={0} | hedef={1}" -f $seed.Source, $seed.Destination)
+                if (Test-Path -LiteralPath $seed.Source -PathType Container) {
+                    Copy-DirectoryContents -SourcePath $seed.Source -DestinationPath $seed.Destination -Description $seed.Label
+                }
+                else {
+                    Write-BuildLog ("fwfiles tohum kaynagi bulunamadi: {0}" -f $seed.Source) "WARN"
+                }
             }
         }
+
+        $requiredRelativePaths = @(
+            "sources\boot.wim",
+            "boot\bcd",
+            "boot\etfsboot.com",
+            "EFI\Boot\bootx64.efi",
+            "EFI\Microsoft\Boot\BCD"
+        )
+        $validatedPaths = New-Object System.Collections.Generic.List[string]
+        foreach ($relativePath in $requiredRelativePaths) {
+            $lastManualStep = "gerekli path dogrulama: $relativePath"
+            $stagedPath = Join-Path $destinationMediaRoot $relativePath
+            $preferredSource = Join-Path $SourceMediaRoot $relativePath
+            Write-BuildLog ("Manual staging dogrulamasi basliyor | staged={0} | beklenen kaynak={1}" -f $stagedPath, $preferredSource)
+
+            if (-not (Test-Path -LiteralPath $stagedPath)) {
+                Write-BuildLog ("Staged path eksik, fallback arama basliyor: {0}" -f $stagedPath) "WARN"
+                $leafName = Split-Path $relativePath -Leaf
+                $candidateFiles = @(
+                    Get-ChildItem -LiteralPath $ArchitectureRoot -Recurse -Force -File -Filter $leafName -ErrorAction SilentlyContinue
+                )
+                if ($candidateFiles.Count -gt 0) {
+                    $selectedCandidate = $candidateFiles |
+                        Sort-Object @{
+                            Expression = {
+                                if ($_.FullName.EndsWith($relativePath, [System.StringComparison]::OrdinalIgnoreCase)) { 0 } else { 1 }
+                            }
+                        }, FullName |
+                        Select-Object -First 1
+                    Write-BuildLog ("Fallback kaynak bulundu | goreli={0} | kaynak={1} | hedef={2}" -f $relativePath, $selectedCandidate.FullName, $stagedPath)
+                    New-Item -ItemType Directory -Force -Path (Split-Path $stagedPath -Parent) | Out-Null
+                    Copy-Item -LiteralPath $selectedCandidate.FullName -Destination $stagedPath -Force
+                }
+                else {
+                    throw ("Gerekli WinPE dosyasi bulunamadi | staged={0} | beklenen kaynak={1} | mimari kok={2}" -f $stagedPath, $preferredSource, $ArchitectureRoot)
+                }
+            }
+
+            if (-not (Test-Path -LiteralPath $stagedPath)) {
+                throw ("Manual staging dogrulama basarisiz | staged={0} | beklenen kaynak={1}" -f $stagedPath, $preferredSource)
+            }
+
+            Write-BuildLog ("Manual staging dogrulandi: {0}" -f $stagedPath)
+            $validatedPaths.Add($stagedPath)
+        }
+
+        $lastManualStep = "son ozet"
+        Write-BuildLog ("Manual staging basarili | staged media root={0}" -f $destinationMediaRoot)
+        Write-BuildLog ("Manual staging dogrulanan dosyalar: {0}" -f ($validatedPaths -join ", "))
     }
-
-    $requiredAfterStaging = @(
-        (Join-Path $destinationMediaRoot "sources\boot.wim"),
-        (Join-Path $destinationMediaRoot "boot\bcd"),
-        (Join-Path $destinationMediaRoot "boot\etfsboot.com"),
-        (Join-Path $destinationMediaRoot "EFI\Boot\bootx64.efi"),
-        (Join-Path $destinationMediaRoot "EFI\Microsoft\Boot\BCD"),
-        $destinationFwfilesRoot,
-        $destinationMountRoot
-    )
-
-    $missingAfterStaging = @($requiredAfterStaging | Where-Object { -not (Test-Path -LiteralPath $_) })
-    if ($missingAfterStaging.Count -gt 0) {
+    catch {
         throw (
-            "Manual WinPE staging basarisiz. Mimari kok={0}; kaynak Media={1}; eksik ogeler={2}" -f
+            "Manual WinPE staging basarisiz. Mimari kok={0}; kaynak Media={1}; hedef work root={2}; son adim={3}; hata={4}" -f
             $ArchitectureRoot,
             $SourceMediaRoot,
-            ($missingAfterStaging -join ", ")
+            $WorkRoot,
+            $lastManualStep,
+            $_.Exception.Message
         )
     }
-
-    Write-BuildLog ("Manual staging dogrulandi: {0}" -f (Join-Path $destinationMediaRoot "sources\boot.wim"))
-    Write-BuildLog ("Manual staging dogrulandi: {0}" -f (Join-Path $destinationMediaRoot "boot\bcd"))
-    Write-BuildLog ("Manual staging dogrulandi: {0}" -f (Join-Path $destinationMediaRoot "boot\etfsboot.com"))
-    Write-BuildLog ("Manual staging dogrulandi: {0}" -f (Join-Path $destinationMediaRoot "EFI\Boot\bootx64.efi"))
-    Write-BuildLog ("Manual staging dogrulandi: {0}" -f (Join-Path $destinationMediaRoot "EFI\Microsoft\Boot\BCD"))
 }
 
 function Find-ToolPath {
