@@ -853,9 +853,12 @@ function Invoke-MsysCommand {
         }
         throw ("MSYS komut basarisiz oldu ({0}): {1} | cikti={2}" -f $result.ExitCode, $Description, $outputSummary)
     }
+
     if ($PassThruOutput) {
-        return $result.Output
+        return $result
     }
+
+    return $result
 }
 
 function Invoke-MsysCommandResult {
@@ -871,14 +874,19 @@ function Invoke-MsysCommandResult {
     $wrappedScript = @(
         'set +e'
         $ScriptText
-        'msys_exit_code=$?'
-        'echo EXIT_CODE:$msys_exit_code'
-        'exit 0'
+        '__CT_EXIT_CODE__=$?'
+        'printf ''\n__CT_EXIT_CODE__:%s\n'' "$__CT_EXIT_CODE__"'
+        'exit "$__CT_EXIT_CODE__"'
     ) -join "`n"
+    $bashArguments = @("--noprofile", "--norc", "-c", $wrappedScript)
+    Write-BuildLog ("MSYS bash path: {0}" -f $BashPath)
+    Write-BuildLog ("MSYS bash args: {0}" -f (($bashArguments | ForEach-Object {
+        if ($_ -match '\s') { '"' + $_ + '"' } else { $_ }
+    }) -join " "))
 
     try {
         $process = Start-Process -FilePath $BashPath `
-            -ArgumentList @("-lc", $wrappedScript) `
+            -ArgumentList $bashArguments `
             -WorkingDirectory (Get-Location).Path `
             -Wait `
             -PassThru `
@@ -888,15 +896,16 @@ function Invoke-MsysCommandResult {
 
         $stdoutLines = @(Read-ExternalOutputFile -Path $stdoutFile)
         $stderrLines = @(Read-ExternalOutputFile -Path $stderrFile)
-        $exitCodeLine = $stdoutLines | Where-Object { $_ -match '^EXIT_CODE:(-?\d+)$' } | Select-Object -Last 1
+        $exitCodeLine = $stdoutLines | Where-Object { $_ -match '^__CT_EXIT_CODE__:(-?\d+)$' } | Select-Object -Last 1
+        $markerFound = -not [string]::IsNullOrWhiteSpace($exitCodeLine)
         if (-not $exitCodeLine) {
             $stdoutSummary = ($stdoutLines | Select-Object -Last 50) -join " || "
             $stderrSummary = ($stderrLines | Select-Object -Last 50) -join " || "
             throw ("MSYS komut gercek cikis kodunu raporlamadi: {0} | stdout={1} | stderr={2}" -f $Description, $stdoutSummary, $stderrSummary)
         }
 
-        $capturedExitCode = [int]([regex]::Match($exitCodeLine, '^EXIT_CODE:(-?\d+)$').Groups[1].Value)
-        $stdoutLines = @($stdoutLines | Where-Object { $_ -notmatch '^EXIT_CODE:(-?\d+)$' })
+        $capturedExitCode = [int]([regex]::Match($exitCodeLine, '^__CT_EXIT_CODE__:(-?\d+)$').Groups[1].Value)
+        $stdoutLines = @($stdoutLines | Where-Object { $_ -notmatch '^__CT_EXIT_CODE__:(-?\d+)$' })
 
         foreach ($line in $stdoutLines) {
             Write-BuildLog ("[stdout] {0}" -f $line)
@@ -904,14 +913,17 @@ function Invoke-MsysCommandResult {
         foreach ($line in $stderrLines) {
             Write-BuildLog ("[stderr] {0}" -f $line)
         }
+        Write-BuildLog ("[result] MSYS exit marker found: {0}" -f $markerFound)
         Write-BuildLog ("[result] MSYS exit code: {0}" -f $capturedExitCode)
+        Write-BuildLog ("[result] MSYS bash process exit code: {0}" -f $process.ExitCode)
 
         return [pscustomobject]@{
-            ExitCode = $capturedExitCode
-            Output   = @($stdoutLines + $stderrLines)
-            Stdout   = $stdoutLines
-            Stderr   = $stderrLines
+            ExitCode     = $capturedExitCode
+            Output       = @($stdoutLines + $stderrLines)
+            Stdout       = $stdoutLines
+            Stderr       = $stderrLines
             BashExitCode = $process.ExitCode
+            MarkerFound  = $markerFound
         }
     }
     finally {
