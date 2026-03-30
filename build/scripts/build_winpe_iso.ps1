@@ -882,6 +882,7 @@ function Invoke-MsysCommandResult {
     Write-BuildLog ("MSYS komut: {0}" -f $Description)
     $stdoutFile = Join-Path $env:TEMP ("cigertool-msys-{0}.stdout.log" -f ([guid]::NewGuid().ToString("N")))
     $stderrFile = Join-Path $env:TEMP ("cigertool-msys-{0}.stderr.log" -f ([guid]::NewGuid().ToString("N")))
+    $scriptFile = Join-Path $env:TEMP ("cigertool-msys-{0}.script.sh" -f ([guid]::NewGuid().ToString("N")))
     $wrappedScript = @(
         'set +e'
         $ScriptText
@@ -889,18 +890,22 @@ function Invoke-MsysCommandResult {
         'printf ''\n__CT_EXIT_CODE__:%s\n'' "$__CT_EXIT_CODE__"'
         'exit "$__CT_EXIT_CODE__"'
     ) -join "`n"
-    $bashArguments = @("--noprofile", "--norc", "-c", $wrappedScript)
+    $msysScriptPath = Convert-ToMsysPath -PathValue $scriptFile
+    $bashArguments = @("--noprofile", "--norc", $msysScriptPath)
     $scriptPreview = $wrappedScript
     if ($scriptPreview.Length -gt 200) {
         $scriptPreview = $scriptPreview.Substring(0, 200)
     }
     $scriptPreview = $scriptPreview.Replace("`r", "\r").Replace("`n", "\n")
+    [System.IO.File]::WriteAllText($scriptFile, $wrappedScript, (New-Object System.Text.UTF8Encoding($false)))
     Write-BuildLog ("MSYS bash path: {0}" -f $BashPath)
+    Write-BuildLog ("MSYS bash script file: {0}" -f $scriptFile)
+    Write-BuildLog ("MSYS bash script MSYS path: {0}" -f $msysScriptPath)
     Write-BuildLog ("MSYS bash script length: {0}" -f $wrappedScript.Length)
     Write-BuildLog ("MSYS bash script preview: {0}" -f $scriptPreview)
     Write-BuildLog ("MSYS bash args: {0}" -f (($bashArguments | ForEach-Object {
-        if ($_ -eq $wrappedScript) {
-            '<script>'
+        if ($_ -eq $msysScriptPath) {
+            '<script-file>'
         }
         elseif ($_ -match '\s') { '"' + $_ + '"' } else { $_ }
     }) -join " "))
@@ -957,7 +962,7 @@ function Invoke-MsysCommandResult {
         }
     }
     finally {
-        Remove-Item -LiteralPath $stdoutFile, $stderrFile -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $stdoutFile, $stderrFile, $scriptFile -Force -ErrorAction SilentlyContinue
     }
 }
 
