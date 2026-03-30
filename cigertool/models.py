@@ -197,10 +197,18 @@ class ToolEntry:
     category: str
     description: str
     launch_path: str | None = None
+    launch_args: list[str] = field(default_factory=list)
+    working_directory: str | None = None
+    internal_page: str | None = None
+    manifest_path: str | None = None
     download_url: str | None = None
     bundled: bool = False
     layer: str = "USER"
     source_root: str | None = None
+
+    @property
+    def is_launchable(self) -> bool:
+        return bool(self.launch_path or self.internal_page)
 
 
 @dataclass(slots=True)
@@ -225,6 +233,10 @@ class IsoEntry:
     name: str
     path: str
     size_bytes: int
+    source_root: str | None
+    library_root: str | None
+    library_section: str
+    relative_path: str | None
     category: IsoCategory
     profile: IsoProfile
     boot_strategy: BootStrategy
@@ -243,3 +255,14 @@ class IsoEntry:
         if self.support_status is IsoSupportStatus.UNTESTED:
             return "⚠ test edilmedi"
         return "❌ desteklenmiyor"
+
+    @property
+    def library_label(self) -> str:
+        mapping = {
+            "windows": "Windows",
+            "linux": "Linux",
+            "tools": "Araçlar",
+            "legacy": "Legacy",
+            "other": "Diğer",
+        }
+        return mapping.get(self.library_section, self.library_section.title())

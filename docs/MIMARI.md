@@ -1,11 +1,13 @@
 # Mimari Ozeti
 
+> Legacy note: this file is now historical reference. The active architecture reset and current product boundaries are tracked in `docs/ARCHITECTURE_REWRITE_PLAN.md`.
+
 ## Katmanlar
 
 - `cigertool/ui/`: PySide6 grafik arayuz
 - `cigertool/services/`: disk tarama, clone planlama, SMART ozeti, multiboot tarama ve komut calistirma servisleri
-- `build/scripts/`: Windows tarafli build ve clone scriptleri
-- `winpe/files/`: WinPE shell override ve startup dosyalari
+- `build/scripts/`: build, packaging, legacy WinPE scripts, and the new LiveOS foundation script
+- `winpe/files/`: legacy WinPE shell override ve startup dosyalari
 
 ## Smart Clone Tasarimi
 

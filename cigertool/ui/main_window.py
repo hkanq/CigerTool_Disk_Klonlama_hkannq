@@ -46,6 +46,8 @@ class MainWindow(QMainWindow):
         self.current_plan: OperationPlan | None = None
         self.cached_tools: list[ToolEntry] = []
         self.cached_isos: list[IsoEntry] = []
+        self.cached_startup_status: dict[str, Any] = {}
+        self._last_startup_warning_key = ""
         self.setWindowTitle(APP_NAME)
         self.resize(1480, 940)
         self.setStyleSheet(STYLE_SHEET)
@@ -78,7 +80,7 @@ class MainWindow(QMainWindow):
 
         title = QLabel("CigerTool")
         title.setObjectName("Title")
-        subtitle = QLabel("WinPE tabanli clone, recovery ve multiboot platformu")
+        subtitle = QLabel("Canli ortamda clone, recovery, tanilama ve ISO kutuphanesi")
         subtitle.setObjectName("Subtitle")
         layout.addWidget(title)
         layout.addWidget(subtitle)
@@ -136,6 +138,18 @@ class MainWindow(QMainWindow):
         ]
         for page in pages:
             self.pages.addWidget(page)
+        self.internal_tool_pages = {
+            "dashboard": 0,
+            "clone": 1,
+            "boot": 2,
+            "smart": 3,
+            "benchmark": 4,
+            "files": 5,
+            "isos": 6,
+            "tools": 7,
+            "settings": 8,
+            "logs": 9,
+        }
         layout.addWidget(self.pages)
         return wrapper
 
@@ -245,11 +259,12 @@ class MainWindow(QMainWindow):
         title = QLabel("Dosya Yoneticisi")
         title.setObjectName("Title")
         splitter = QSplitter()
+        default_root = self.context.system_service.default_file_browser_root()
         self.file_model = QFileSystemModel()
-        self.file_model.setRootPath(str(Path.home()))
+        self.file_model.setRootPath(str(default_root))
         self.file_tree = QTreeView()
         self.file_tree.setModel(self.file_model)
-        self.file_tree.setRootIndex(self.file_model.index(str(Path.home())))
+        self.file_tree.setRootIndex(self.file_model.index(str(default_root)))
         self.file_preview = QTextEdit()
         self.file_preview.setReadOnly(True)
         self.file_tree.clicked.connect(self.preview_file)
@@ -265,10 +280,10 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(page)
         title = QLabel("ISO Yonetimi")
         title.setObjectName("Title")
-        info = QLabel("/isos/windows, /isos/linux ve /isos/tools otomatik taranir.")
+        info = QLabel("/isos/windows, /isos/linux ve /isos/tools otomatik taranir. Legacy iso-library okunur ama varsayilan yol degildir.")
         info.setObjectName("Subtitle")
-        self.iso_table = QTableWidget(0, 7)
-        self.iso_table.setHorizontalHeaderLabels(["ISO", "Durum", "Kategori", "Profil", "Boot", "Boyut", "Yol"])
+        self.iso_table = QTableWidget(0, 8)
+        self.iso_table.setHorizontalHeaderLabels(["ISO", "Durum", "Kutuphane", "Kategori", "Profil", "Boot", "Boyut", "Yol"])
         self.iso_table.itemSelectionChanged.connect(self._update_iso_details)
         self.iso_details = QTextEdit()
         self.iso_details.setReadOnly(True)
@@ -285,15 +300,22 @@ class MainWindow(QMainWindow):
         title.setObjectName("Title")
         self.tools_table = QTableWidget(0, 6)
         self.tools_table.setHorizontalHeaderLabels(["Arac", "Katman", "Kategori", "Durum", "Kaynak", "Aciklama"])
+        self.tools_table.itemSelectionChanged.connect(self._update_tool_details)
+        self.tool_details = QTextEdit()
+        self.tool_details.setReadOnly(True)
         actions = QHBoxLayout()
-        self.tools_launch_button = QPushButton("Araci Ac")
+        self.tools_launch_button = QPushButton("Araci / Ozelligi Ac")
         self.tools_launch_button.clicked.connect(self.launch_selected_tool)
+        self.tools_folder_button = QPushButton("Klasoru Ac")
+        self.tools_folder_button.clicked.connect(self.open_selected_tool_directory)
         self.shell_button = QPushButton("Terminal Ac")
         self.shell_button.clicked.connect(lambda: self._launch_path("cmd.exe"))
         actions.addWidget(self.tools_launch_button)
+        actions.addWidget(self.tools_folder_button)
         actions.addWidget(self.shell_button)
         layout.addWidget(title)
         layout.addWidget(self.tools_table, 1)
+        layout.addWidget(self.tool_details)
         layout.addLayout(actions)
         return page
 
@@ -313,9 +335,17 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(page)
         title = QLabel("Loglar")
         title.setObjectName("Title")
+        actions = QHBoxLayout()
+        self.log_refresh_button = QPushButton("Logu Yenile")
+        self.log_refresh_button.clicked.connect(self.refresh_all)
+        self.log_folder_button = QPushButton("Log Klasorunu Ac")
+        self.log_folder_button.clicked.connect(self.open_log_directory)
+        actions.addWidget(self.log_refresh_button)
+        actions.addWidget(self.log_folder_button)
         self.log_view = QTextEdit()
         self.log_view.setReadOnly(True)
         layout.addWidget(title)
+        layout.addLayout(actions)
         layout.addWidget(self.log_view, 1)
         return page
 
@@ -346,13 +376,18 @@ class MainWindow(QMainWindow):
             self.target_combo.setCurrentIndex(1)
 
     def _refresh_dashboard(self) -> None:
+        startup_state = self.cached_startup_status.get("state", "bilinmiyor")
+        startup_message = self.cached_startup_status.get("message", "Startup durumu henuz raporlanmadi.")
         lines = [
             "CigerTool by hkannq durum ozeti",
             "",
             f"Tespit edilen disk sayisi: {len(self.disks)}",
             f"ISO kutuphanesi sayisi: {len(self.cached_isos)}",
             f"Arac sayisi: {len(self.cached_tools)}",
+            f"Startup durumu: {startup_state}",
+            f"Startup notu: {startup_message}",
             "Odak senaryo: buyuk HDD -> kucuk SSD Smart Clone",
+            "Runtime: canli ortam kabugu + otomatik uygulama baslatma",
             "Multiboot: /isos/windows, /isos/linux ve /isos/tools klasorleri taranir.",
             "Not: Smart Clone dosya-bazli tasima + resize + boot fix mantigi ile planlanir.",
         ]
@@ -452,6 +487,13 @@ class MainWindow(QMainWindow):
             except Exception as exc:
                 self.file_preview.setText(str(exc))
 
+    def _set_file_browser_root(self, root_path: str) -> None:
+        path = Path(root_path)
+        if not path.exists():
+            return
+        self.file_model.setRootPath(str(path))
+        self.file_tree.setRootIndex(self.file_model.index(str(path)))
+
     def _selected_disk(self, combo: QComboBox) -> Disk | None:
         data = combo.currentData()
         return self.context.disk_service.find_disk(self.disks, int(data)) if data is not None else None
@@ -472,7 +514,15 @@ class MainWindow(QMainWindow):
             "isos": self.context.multiboot_service.scan_isos(self.context.system_service.iso_roots()),
             "smart": self.context.smart_service.snapshot(),
             "log": tail_log(),
+            "startup_status": self.context.system_service.read_runtime_status(),
             "is_winpe": self.context.system_service.is_winpe(),
+            "runtime_mode": self.context.system_service.runtime_mode(),
+            "runtime_root": str(self.context.system_service.runtime_root()),
+            "scripts_root": str(self.context.system_service.scripts_root()),
+            "log_path": str(self.context.system_service.log_path()),
+            "log_root": str(self.context.system_service.log_root()),
+            "runtime_status_path": str(self.context.system_service.runtime_status_path()),
+            "browser_root": str(self.context.system_service.default_file_browser_root()),
             "adk_installed": self.context.system_service.adk_installed(),
             "tool_roots": [str(path) for path in self.context.system_service.tool_roots()],
             "iso_roots": [str(path) for path in self.context.system_service.iso_roots()],
@@ -482,18 +532,27 @@ class MainWindow(QMainWindow):
         self.disks = snapshot["disks"]
         self.cached_tools = snapshot["tools"]
         self.cached_isos = snapshot["isos"]
+        self.cached_startup_status = snapshot.get("startup_status", {}) or {}
         self._refresh_disks()
         self._refresh_dashboard()
         self._refresh_tools_from_items(self.cached_tools)
         self._refresh_multiboot_from_items(self.cached_isos)
         self._refresh_benchmark_from_tools(self.cached_tools)
         self._refresh_settings(snapshot)
+        self._set_file_browser_root(snapshot["browser_root"])
         self.smart_output.setText(str(snapshot["smart"]))
         self.log_view.setText(snapshot["log"])
+        runtime_labels = {
+            "liveos": "Canli Ortam",
+            "winpe": "Gecis Katmani",
+            "windows": "Windows",
+        }
+        runtime_text = runtime_labels.get(snapshot["runtime_mode"], snapshot["runtime_mode"])
         self.winpe_label.setText(
-            f"Ortam: {'WinPE' if snapshot['is_winpe'] else 'Windows'} | "
-            f"ADK: {'Hazir' if snapshot['adk_installed'] else 'Eksik'}"
+            f"Ortam: {runtime_text} | "
+            f"Log: {Path(snapshot['log_path']).name}"
         )
+        self._maybe_show_startup_warning()
         if self.nav.currentRow() < 0:
             self.nav.setCurrentRow(0)
 
@@ -503,20 +562,22 @@ class MainWindow(QMainWindow):
             self.tools_table.setItem(row, 0, QTableWidgetItem(tool.name))
             self.tools_table.setItem(row, 1, QTableWidgetItem(tool.layer))
             self.tools_table.setItem(row, 2, QTableWidgetItem(tool.category))
-            self.tools_table.setItem(row, 3, QTableWidgetItem("Hazir" if tool.launch_path else "Bekleniyor"))
+            self.tools_table.setItem(row, 3, QTableWidgetItem("Hazir" if tool.is_launchable else "Bekleniyor"))
             self.tools_table.setItem(row, 4, QTableWidgetItem(tool.source_root or "-"))
             self.tools_table.setItem(row, 5, QTableWidgetItem(tool.description))
+        self._update_tool_details()
 
     def _refresh_multiboot_from_items(self, isos: list[IsoEntry]) -> None:
         self.iso_table.setRowCount(len(isos))
         for row, item in enumerate(isos):
             self.iso_table.setItem(row, 0, QTableWidgetItem(item.name))
             self.iso_table.setItem(row, 1, QTableWidgetItem(item.status_label))
-            self.iso_table.setItem(row, 2, QTableWidgetItem(item.category.value))
-            self.iso_table.setItem(row, 3, QTableWidgetItem(item.profile.value))
-            self.iso_table.setItem(row, 4, QTableWidgetItem(item.boot_strategy.value))
-            self.iso_table.setItem(row, 5, QTableWidgetItem(human_bytes(item.size_bytes)))
-            self.iso_table.setItem(row, 6, QTableWidgetItem(item.path))
+            self.iso_table.setItem(row, 2, QTableWidgetItem(item.library_label))
+            self.iso_table.setItem(row, 3, QTableWidgetItem(item.category.value))
+            self.iso_table.setItem(row, 4, QTableWidgetItem(item.profile.value))
+            self.iso_table.setItem(row, 5, QTableWidgetItem(item.boot_strategy.value))
+            self.iso_table.setItem(row, 6, QTableWidgetItem(human_bytes(item.size_bytes)))
+            self.iso_table.setItem(row, 7, QTableWidgetItem(item.path))
         self._update_iso_details()
 
     def _refresh_benchmark_from_tools(self, tools: list[ToolEntry]) -> None:
@@ -536,8 +597,20 @@ class MainWindow(QMainWindow):
         lines = [
             "CigerTool ayar ve ortam ozeti",
             "",
+            f"Runtime modu: {snapshot['runtime_mode']}",
+            f"Runtime koku: {snapshot['runtime_root']}",
+            f"Operasyon scriptleri: {snapshot['scripts_root']}",
+            f"Startup durum dosyasi: {snapshot['runtime_status_path']}",
+            f"Log dosyasi: {snapshot['log_path']}",
+            f"Log kok dizini: {snapshot['log_root']}",
+            f"Dosya yoneticisi koku: {snapshot['browser_root']}",
+            "",
             f"WinPE: {'Evet' if snapshot['is_winpe'] else 'Hayir'}",
             f"ADK kurulu: {'Evet' if snapshot['adk_installed'] else 'Hayir'}",
+            "",
+            f"Startup state: {self.cached_startup_status.get('state', '-')}",
+            f"Startup stage: {self.cached_startup_status.get('stage', '-')}",
+            f"Startup mesaj: {self.cached_startup_status.get('message', '-')}",
             "",
             "Tool roots:",
             *[f"- {item}" for item in snapshot["tool_roots"]],
@@ -560,9 +633,27 @@ class MainWindow(QMainWindow):
         self.boot_button.setEnabled(not busy)
         self.benchmark_launch.setEnabled(not busy)
         self.tools_launch_button.setEnabled(not busy)
+        self.tools_folder_button.setEnabled(not busy)
+        self.log_refresh_button.setEnabled(not busy)
+        self.log_folder_button.setEnabled(not busy)
 
     def _show_error(self, title: str, message: str) -> None:
         QMessageBox.critical(self, title, message)
+
+    def _maybe_show_startup_warning(self) -> None:
+        state = str(self.cached_startup_status.get("state", "")).lower()
+        message = str(self.cached_startup_status.get("message", "")).strip()
+        warning_key = f"{state}|{message}"
+        if warning_key == self._last_startup_warning_key:
+            return
+        if state not in {"degraded", "failed"} or not message:
+            return
+        self._last_startup_warning_key = warning_key
+        QMessageBox.warning(
+            self,
+            "Startup Uyarisi",
+            f"Canli oturum acildi ancak startup tam saglikli degil.\n\n{message}",
+        )
 
     def _update_iso_details(self) -> None:
         row = self.iso_table.currentRow()
@@ -573,12 +664,17 @@ class MainWindow(QMainWindow):
         lines = [
             f"ISO: {item.name}",
             f"Durum: {item.status_label}",
+            f"Kutuphane bolumu: {item.library_label}",
             f"Kategori: {item.category.value}",
             f"Profil: {item.profile.value}",
             f"Boot stratejisi: {item.boot_strategy.value}",
             f"Boyut: {human_bytes(item.size_bytes)}",
             f"Yol: {item.path}",
         ]
+        if item.source_root:
+            lines.append(f"Kaynak kok: {item.source_root}")
+        if item.relative_path:
+            lines.append(f"Goreli yol: {item.relative_path}")
         if item.failure_reason:
             lines.append(f"Boot hatasi sebebi: {item.failure_reason}")
         if item.kernel_path:
@@ -596,31 +692,98 @@ class MainWindow(QMainWindow):
         self.iso_details.setText("\n".join(lines))
 
     def launch_selected_tool(self) -> None:
-        row = self.tools_table.currentRow()
-        if row < 0 or row >= len(self.cached_tools):
+        tool = self._selected_tool()
+        if tool is None:
             self._show_error("Arac Kutusu", "Lutfen bir arac secin.")
             return
-        tool = self.cached_tools[row]
-        if not tool.launch_path:
+        if tool.internal_page:
+            page_index = self.internal_tool_pages.get(tool.internal_page)
+            if page_index is None:
+                self._show_error("Arac Kutusu", f"Tanimli olmayan uygulama ici hedef: {tool.internal_page}")
+                return
+            self.nav.setCurrentRow(page_index)
+            return
+        if not tool.is_launchable:
             self._show_error("Arac Kutusu", "Secilen arac icin calistirilabilir dosya bulunamadi.")
             return
-        self._launch_path(tool.launch_path)
+        try:
+            self.context.tool_launcher_service.launch(tool)
+        except Exception as exc:
+            self._show_error("Arac Kutusu", str(exc))
+
+    def open_log_directory(self) -> None:
+        try:
+            subprocess.Popen(
+                ["explorer.exe", str(self.context.system_service.log_root())],
+                cwd=str(self.context.system_service.runtime_root()),
+            )
+        except Exception as exc:
+            self._show_error("Loglar", str(exc))
 
     def launch_benchmark_tool(self) -> None:
         tool = next((item for item in self.cached_tools if item.category == "Benchmark" and item.launch_path), None)
         if not tool:
             self._show_error("Benchmark", "Calistirilabilir benchmark araci bulunamadi.")
             return
-        self._launch_path(tool.launch_path)
+        try:
+            self.context.tool_launcher_service.launch(tool)
+        except Exception as exc:
+            self._show_error("Benchmark", str(exc))
+
+    def open_selected_tool_directory(self) -> None:
+        tool = self._selected_tool()
+        if tool is None:
+            self._show_error("Arac Kutusu", "Lutfen bir arac secin.")
+            return
+        try:
+            if tool.internal_page:
+                self._show_error("Arac Kutusu", "Uygulama ici araclarin ayri bir klasoru yoktur.")
+                return
+            self.context.tool_launcher_service.open_tool_directory(tool)
+        except Exception as exc:
+            self._show_error("Arac Kutusu", str(exc))
+
+    def _selected_tool(self) -> ToolEntry | None:
+        row = self.tools_table.currentRow()
+        if row < 0 or row >= len(self.cached_tools):
+            return None
+        return self.cached_tools[row]
+
+    def _update_tool_details(self) -> None:
+        tool = self._selected_tool()
+        if tool is None:
+            self.tool_details.setText("Bir arac secildiginde launcher ayrintilari burada gorunur.")
+            return
+
+        launch_target = tool.internal_page if tool.internal_page else (tool.launch_path or "Bulunamadi")
+        lines = [
+            f"Arac: {tool.name}",
+            f"Katman: {tool.layer}",
+            f"Kategori: {tool.category}",
+            f"Durum: {'Hazir' if tool.is_launchable else 'Eksik'}",
+            f"Kaynak kok: {tool.source_root or '-'}",
+            f"Calistirma hedefi: {launch_target}",
+            f"Calisma dizini: {tool.working_directory or '-'}",
+            f"Manifest: {tool.manifest_path or '-'}",
+            "",
+            tool.description,
+        ]
+        if tool.launch_args:
+            lines.insert(7, f"Argumanlar: {' '.join(tool.launch_args)}")
+        if tool.internal_page:
+            lines.append("")
+            lines.append("Bu giris, uygulama ici bir araca yonlendirir.")
+        self.tool_details.setText("\n".join(lines))
 
     def _launch_path(self, path: str | None) -> None:
         if not path:
             self._show_error("Calistirma Hatasi", "Calistirilacak yol bulunamadi.")
             return
         try:
+            working_directory = str(self.context.system_service.runtime_root())
             if Path(path).exists():
-                subprocess.Popen([path])
+                subprocess.Popen([path], cwd=working_directory)
             else:
-                subprocess.Popen(path)
+                subprocess.Popen(path, cwd=working_directory)
         except Exception as exc:
             self._show_error("Calistirma Hatasi", str(exc))

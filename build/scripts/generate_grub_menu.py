@@ -22,8 +22,20 @@ def quoted_message(message: str) -> str:
     return message.replace('"', "").strip()
 
 
-def render_windows_entry(name: str, iso_path: str, wimboot_path: str | None, failure_reason: str | None) -> list[str]:
+def indent_lines(lines: list[str], level: int = 1) -> list[str]:
+    prefix = "    " * level
+    return [f"{prefix}{line}" if line else "" for line in lines]
+
+
+def render_windows_entry(
+    name: str,
+    iso_path: str,
+    wimboot_path: str | None,
+    efi_boot_path: str | None,
+    failure_reason: str | None,
+) -> list[str]:
     failure = quoted_message(failure_reason or "missing boot files")
+    efi_path = grub_literal(efi_boot_path or "/efi/boot/bootx64.efi")
     lines = [
         f'menuentry "Windows: {grub_label(name)}" {{',
         f"    set isofile='{grub_literal(iso_path)}'",
@@ -47,8 +59,8 @@ def render_windows_entry(name: str, iso_path: str, wimboot_path: str | None, fai
         )
     lines.extend(
         [
-            "    if [ -f (loop)/efi/boot/bootx64.efi ]; then",
-            "        chainloader (loop)/efi/boot/bootx64.efi",
+            f"    if [ -f (loop){efi_path} ]; then",
+            f"        chainloader (loop){efi_path}",
             "        boot",
             "    fi",
             f'    echo "{failure}"',
@@ -126,14 +138,21 @@ def render_custom_entry(name: str, iso_path: str, config_path: str) -> list[str]
     ]
 
 
-def render_chainload_entry(label: str, name: str, iso_path: str, failure_reason: str | None) -> list[str]:
+def render_chainload_entry(
+    label: str,
+    name: str,
+    iso_path: str,
+    efi_boot_path: str | None,
+    failure_reason: str | None,
+) -> list[str]:
     failure = quoted_message(failure_reason or "missing boot files")
+    efi_path = grub_literal(efi_boot_path or "/efi/boot/bootx64.efi")
     return [
         f'menuentry "{grub_label(label)}: {grub_label(name)}" {{',
         f"    set isofile='{grub_literal(iso_path)}'",
         '    loopback loop "$isofile"',
-        "    if [ -f (loop)/efi/boot/bootx64.efi ]; then",
-        "        chainloader (loop)/efi/boot/bootx64.efi",
+        f"    if [ -f (loop){efi_path} ]; then",
+        f"        chainloader (loop){efi_path}",
         "        boot",
         "    fi",
         f'    echo "{failure}"',
@@ -153,6 +172,125 @@ def render_fallback_entry(name: str, iso_path: str, failure_reason: str | None) 
     ]
 
 
+def render_cigertool_live_entry(wimboot_path: str | None) -> list[str]:
+    failure = quoted_message("CigerTool Live boot assets missing")
+    if not wimboot_path:
+        return [
+            'menuentry "CigerTool Live" {',
+            f'    echo "{failure}"',
+            "    sleep 5",
+            "}",
+            "",
+        ]
+
+    return [
+        'menuentry "CigerTool Live" {',
+        f"    if [ -f {wimboot_path} ] && [ -f /sources/boot.wim ] && [ -f /boot/boot.sdi ] && [ -f /EFI/Microsoft/Boot/BCD ]; then",
+        f"        linux {wimboot_path}",
+        "        if [ -f /EFI/Microsoft/Boot/bootmgfw.efi ]; then",
+        "            initrd newc:bootmgfw.efi:/EFI/Microsoft/Boot/bootmgfw.efi newc:bcd:/EFI/Microsoft/Boot/BCD newc:boot.sdi:/boot/boot.sdi newc:boot.wim:/sources/boot.wim",
+        "            boot",
+        "        fi",
+        "        if [ -f /bootmgr ] && [ -f /boot/BCD ]; then",
+        "            initrd newc:bootmgr:/bootmgr newc:bcd:/boot/BCD newc:boot.sdi:/boot/boot.sdi newc:boot.wim:/sources/boot.wim",
+        "            boot",
+        "        fi",
+        "    fi",
+        f'    echo "{failure}"',
+        "    sleep 5",
+        "}",
+        "",
+    ]
+
+
+def render_iso_entry(entry, media_root: Path, wimboot_path: str | None) -> list[str]:
+    from cigertool.models import BootStrategy, IsoProfile, IsoSupportStatus
+
+    iso_grub_path = to_grub_path(Path(entry.path), media_root)
+    companion_cfg = (
+        to_grub_path(Path(entry.companion_config), media_root)
+        if entry.companion_config and Path(entry.companion_config).exists()
+        else ""
+    )
+    if entry.support_status is IsoSupportStatus.UNSUPPORTED:
+        return render_fallback_entry(entry.name, iso_grub_path, entry.failure_reason)
+    if entry.boot_strategy is BootStrategy.CUSTOM_CONFIG and companion_cfg:
+        return render_custom_entry(entry.name, iso_grub_path, companion_cfg)
+    if entry.profile is IsoProfile.WINDOWS:
+        return render_windows_entry(
+            entry.name,
+            iso_grub_path,
+            wimboot_path,
+            entry.efi_boot_path,
+            entry.failure_reason,
+        )
+    if entry.profile is IsoProfile.UBUNTU_DEBIAN:
+        return render_ubuntu_debian_entry(entry.name, iso_grub_path, entry.kernel_path, entry.initrd_path)
+    if entry.profile is IsoProfile.ARCH:
+        return render_arch_entry(entry.name, iso_grub_path, entry.kernel_path, entry.initrd_path)
+    if entry.boot_strategy is BootStrategy.EFI_CHAINLOAD:
+        return render_chainload_entry("Tool ISO", entry.name, iso_grub_path, entry.efi_boot_path, entry.failure_reason)
+    return render_fallback_entry(entry.name, iso_grub_path, entry.failure_reason)
+
+
+def render_iso_section(title: str, entries: list, media_root: Path, wimboot_path: str | None) -> list[str]:
+    lines = [f'submenu "{grub_label(title)}" {{']
+    for entry in entries:
+        lines.extend(indent_lines(render_iso_entry(entry, media_root, wimboot_path), 1))
+        lines.append("")
+    if lines[-1] == "":
+        lines.pop()
+    lines.append("}")
+    return lines
+
+
+def render_iso_library(entries: list, media_root: Path, wimboot_path: str | None) -> list[str]:
+    section_titles = {
+        "windows": "Windows ISO'lari",
+        "linux": "Linux ISO'lari",
+        "tools": "Arac ve Kurtarma ISO'lari",
+        "legacy": "Legacy ISO Library",
+        "other": "Diger ISO'lar",
+        "unsupported": "Desteklenmeyen ISO'lar",
+    }
+    section_order = ["windows", "linux", "tools", "legacy", "other", "unsupported"]
+    grouped: dict[str, list] = {section: [] for section in section_order}
+
+    for entry in entries:
+        target_section = entry.library_section or entry.category.value
+        if getattr(entry, "support_status", None) and entry.support_status.value == "unsupported":
+            target_section = "unsupported"
+        grouped.setdefault(target_section, []).append(entry)
+
+    lines = ['submenu "ISO Library" {']
+    rendered_section = False
+    for section in section_order:
+        bucket = grouped.get(section, [])
+        if not bucket:
+            continue
+        lines.extend(indent_lines(render_iso_section(section_titles[section], bucket, media_root, wimboot_path), 1))
+        lines.append("")
+        rendered_section = True
+
+    if not rendered_section:
+        lines.extend(
+            indent_lines(
+                [
+                    'menuentry "ISO bulunamadi" {',
+                    '    echo "incompatible ISO type"',
+                    "    sleep 5",
+                    "}",
+                ],
+                1,
+            )
+        )
+    elif lines[-1] == "":
+        lines.pop()
+
+    lines.append("}")
+    return lines
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--media-root", required=True)
@@ -163,7 +301,6 @@ def main() -> None:
     project_root = Path(__file__).resolve().parents[2]
     sys.path.insert(0, str(project_root))
 
-    from cigertool.models import BootStrategy, IsoProfile, IsoSupportStatus
     from cigertool.services.multiboot_service import MultibootService
 
     media_root = Path(args.media_root).resolve()
@@ -200,55 +337,13 @@ def main() -> None:
         "",
         "terminal_output console",
         "",
-        'menuentry "CigerTool (WinPE)" {',
-        "    if [ -f /EFI/CigerTool/winpebootx64.efi ]; then",
-        "        chainloader /EFI/CigerTool/winpebootx64.efi",
-        "        boot",
-        "    fi",
-        "    if [ -f /EFI/Microsoft/Boot/bootmgfw.efi ]; then",
-        "        chainloader /EFI/Microsoft/Boot/bootmgfw.efi",
-        "        boot",
-        "    fi",
-        '    echo "missing boot files"',
-        "    sleep 5",
-        "}",
-        "",
     ]
+    lines.extend(render_cigertool_live_entry(wimboot_path or None))
 
-    if not entries:
-        lines.extend(
-            [
-                'menuentry "ISO bulunamadi" {',
-                '    echo "incompatible ISO type"',
-                "    sleep 5",
-                "}",
-            ]
-        )
-    else:
-        for entry in entries:
-            iso_grub_path = to_grub_path(Path(entry.path), media_root)
-            companion_cfg = (
-                to_grub_path(Path(entry.companion_config), media_root)
-                if entry.companion_config and Path(entry.companion_config).exists()
-                else ""
-            )
-            reason = entry.failure_reason or ""
-            print(f"[{entry.support_status.value.upper()}] {entry.name} :: {reason or 'ready'}")
-            if entry.support_status is IsoSupportStatus.UNSUPPORTED:
-                lines.extend(render_fallback_entry(entry.name, iso_grub_path, entry.failure_reason))
-            elif entry.boot_strategy is BootStrategy.CUSTOM_CONFIG and companion_cfg:
-                lines.extend(render_custom_entry(entry.name, iso_grub_path, companion_cfg))
-            elif entry.profile is IsoProfile.WINDOWS:
-                lines.extend(render_windows_entry(entry.name, iso_grub_path, wimboot_path or None, entry.failure_reason))
-            elif entry.profile is IsoProfile.UBUNTU_DEBIAN:
-                lines.extend(render_ubuntu_debian_entry(entry.name, iso_grub_path, entry.kernel_path, entry.initrd_path))
-            elif entry.profile is IsoProfile.ARCH:
-                lines.extend(render_arch_entry(entry.name, iso_grub_path, entry.kernel_path, entry.initrd_path))
-            elif entry.boot_strategy is BootStrategy.EFI_CHAINLOAD:
-                lines.extend(render_chainload_entry("Tool ISO", entry.name, iso_grub_path, entry.failure_reason))
-            else:
-                lines.extend(render_fallback_entry(entry.name, iso_grub_path, entry.failure_reason))
-            lines.append("")
+    for entry in entries:
+        reason = entry.failure_reason or ""
+        print(f"[{entry.support_status.value.upper()}] {entry.name} :: {reason or 'ready'}")
+    lines.extend(render_iso_library(entries, media_root, wimboot_path or None))
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text("\n".join(lines).strip() + "\n", encoding="utf-8")

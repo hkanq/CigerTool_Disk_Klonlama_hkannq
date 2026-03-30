@@ -1,5 +1,7 @@
 # WinPE Build
 
+> Legacy note: this document describes the transitional WinPE build path only. The default product direction is now `CigerTool Live`, driven by the `liveos/` layer and `build/scripts/build_liveos_foundation.ps1`.
+
 ## Gereksinimler
 
 - Windows ADK
@@ -34,5 +36,7 @@ Workflow, uygun GRUB toolchain mevcutsa `isos/windows`, `isos/linux` ve `isos/to
 Windows ISO'lari icin `wimboot` binary'si bulunursa GRUB menu bunu kullanmaya calisir; aksi halde EFI fallback devreye girer.
 
 ## Neden WinPE Shell Yaklasimi?
+
+Bu kisim yeni varsayilan mimariyi tarif etmez. Sadece legacy yolun neden boyle kuruldugunu belgelemek icin tutulur.
 
 WinPE icinde klasik masaustu deneyimi yerine uygulamayi shell olarak acmak daha deterministik ve daha hizli bir acilis saglar. Bu sayede login gerektirmeden dogrudan clone arayuzu baslatilir.

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 
+from ..config import resolve_operation_script
 from ..models import CloneAnalysis, CloneMode, Disk, OperationPlan, Partition, PlanRisk, PlanStep, PartitionRole, human_bytes
 
 
@@ -104,13 +105,14 @@ class CloneService:
     def _raw_plan(self, analysis: CloneAnalysis) -> OperationPlan:
         source = analysis.source_disk
         target = analysis.target_disk
+        script_path = resolve_operation_script("invoke_raw_clone.ps1")
         command = [
             "powershell",
             "-NoProfile",
             "-ExecutionPolicy",
             "Bypass",
             "-File",
-            "build\\scripts\\invoke_raw_clone.ps1",
+            str(script_path),
             "-SourceDisk",
             str(source.number),
             "-TargetDisk",
@@ -130,13 +132,14 @@ class CloneService:
         source = analysis.source_disk
         target = analysis.target_disk
         mode = CloneMode.SMART if include_data else CloneMode.SYSTEM
+        script_path = resolve_operation_script("invoke_smart_clone.ps1")
         wizard = [
             "powershell",
             "-NoProfile",
             "-ExecutionPolicy",
             "Bypass",
             "-File",
-            "build\\scripts\\invoke_smart_clone.ps1",
+            str(script_path),
             "-SourceDisk",
             str(source.number),
             "-TargetDisk",

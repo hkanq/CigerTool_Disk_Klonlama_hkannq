@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import logging
 
-from .config import LOG_PATH
+from .config import resolve_log_path
 
 
 def get_logger() -> logging.Logger:
@@ -11,8 +11,9 @@ def get_logger() -> logging.Logger:
     if logger.handlers:
         return logger
 
-    LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    handler = logging.FileHandler(LOG_PATH, encoding="utf-8")
+    log_path = resolve_log_path()
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    handler = logging.FileHandler(log_path, encoding="utf-8")
     formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
     handler.setFormatter(formatter)
     logger.setLevel(logging.INFO)
@@ -22,9 +23,8 @@ def get_logger() -> logging.Logger:
 
 
 def tail_log(lines: int = 200) -> str:
-    path = Path(LOG_PATH)
+    path = Path(resolve_log_path())
     if not path.exists():
         return ""
     content = path.read_text(encoding="utf-8", errors="replace").splitlines()
     return "\n".join(content[-lines:])
-

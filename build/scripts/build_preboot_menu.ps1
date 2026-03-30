@@ -117,7 +117,7 @@ $bootGrubDir = Join-Path $mediaPath "boot\grub"
 $bootGrubArchDir = Join-Path $bootGrubDir "x86_64-efi"
 $efiTargetPath = Join-Path $efiTargetDir "grubx64.efi"
 $efiDynamicCfg = Join-Path $efiTargetDir "grub.cfg"
-$efiBootFallback = Join-Path $efiTargetDir "winpebootx64.efi"
+$efiBootFallback = Join-Path $efiTargetDir "platformbootx64.efi"
 $efiBootPath = Join-Path $efiBootDir "bootx64.efi"
 $efiBootGrubPath = Join-Path $efiBootDir "grubx64.efi"
 $efiBootCfg = Join-Path $efiBootDir "grub.cfg"
@@ -130,7 +130,7 @@ foreach ($path in @($efiTargetDir, $efiBootDir, $efiDebianDir, $bootGrubDir, $bo
 
 if ((Test-Path $efiBootPath) -and -not (Test-Path $efiBootFallback)) {
     Copy-Item -Path $efiBootPath -Destination $efiBootFallback -Force
-    Write-BuildLog "WinPE fallback bootx64.efi yedeklendi: $efiBootFallback"
+    Write-BuildLog "Platform fallback bootx64.efi yedeklendi: $efiBootFallback"
 }
 
 Copy-Item -Path $vendorGrubEfi -Destination $efiTargetPath -Force
@@ -145,10 +145,12 @@ Write-BuildLog "Prebuilt GRUB EFI binary ve destek dosyalari medyaya kopyalandi.
 $wimbootSource = Resolve-Wimboot -ProjectRoot $projectRoot -MediaRoot $mediaPath
 $wimbootTarget = Join-Path $efiTargetDir "wimboot"
 $wimbootGrubPath = ""
-if ($wimbootSource -and (Test-Path $wimbootSource)) {
-    Copy-Item -Path $wimbootSource -Destination $wimbootTarget -Force
-    $wimbootGrubPath = "/EFI/CigerTool/wimboot"
+if (-not $wimbootSource -or -not (Test-Path $wimbootSource)) {
+    throw "wimboot bulunamadi. CigerTool Live varsayilan boot yolu dogrudan boot.wim yuklemesi gerektirir."
 }
+
+Copy-Item -Path $wimbootSource -Destination $wimbootTarget -Force
+$wimbootGrubPath = "/EFI/CigerTool/wimboot"
 
 $renderScript = Join-Path $projectRoot "build\scripts\generate_grub_menu.py"
 $generatorOutput = & python $renderScript --media-root $mediaPath --output $efiDynamicCfg --wimboot-path $wimbootGrubPath 2>&1 | ForEach-Object { $_.ToString() }

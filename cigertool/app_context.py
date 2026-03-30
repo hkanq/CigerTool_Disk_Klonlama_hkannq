@@ -11,6 +11,7 @@ from .services.execution_service import ExecutionService
 from .services.multiboot_service import MultibootService
 from .services.smart_service import SmartService
 from .services.system_service import SystemEnvironmentService
+from .services.tool_launcher_service import ToolLauncherService
 from .services.tools_service import ToolsCatalogService
 
 
@@ -22,6 +23,7 @@ class AppContext:
     boot_service: BootRepairService
     smart_service: SmartService
     tools_service: ToolsCatalogService
+    tool_launcher_service: ToolLauncherService
     multiboot_service: MultibootService
     system_service: SystemEnvironmentService
     execution_service: ExecutionService
@@ -29,8 +31,8 @@ class AppContext:
 
 def create_context(dry_run: bool = False) -> AppContext:
     logger = get_logger()
-    runner = CommandRunner(logger, dry_run=dry_run)
     system_service = SystemEnvironmentService()
+    runner = CommandRunner(logger, dry_run=dry_run, default_cwd=system_service.runtime_root())
     return AppContext(
         runner=runner,
         disk_service=DiskService(runner, logger),
@@ -38,6 +40,7 @@ def create_context(dry_run: bool = False) -> AppContext:
         boot_service=BootRepairService(logger),
         smart_service=SmartService(runner, logger),
         tools_service=ToolsCatalogService(system_service),
+        tool_launcher_service=ToolLauncherService(system_service),
         multiboot_service=MultibootService(logger),
         system_service=system_service,
         execution_service=ExecutionService(runner),

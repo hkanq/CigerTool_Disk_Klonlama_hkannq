@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "cigertool"
 version = "0.1.0"
-description = "CigerTool by hkannq - WinPE tabanli disk klonlama ve kurtarma platformu"
+description = "CigerTool by hkannq - desktop-first live Windows cloning and recovery platform"
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [
@@ -22,7 +22,7 @@ build = [
 ]
 
 [project.scripts]
-cigertool = "cigertool.__main__:main"
+cigertool = "cigertool.launcher:main"
 
 [tool.setuptools.packages.find]
 include = ["cigertool*"]

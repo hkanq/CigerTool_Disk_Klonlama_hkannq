@@ -27,6 +27,9 @@ class MultibootServiceTests(unittest.TestCase):
             self.assertEqual(entry.boot_strategy, BootStrategy.WIMBOOT)
             self.assertEqual(entry.support_status, IsoSupportStatus.UNTESTED)
             self.assertIsNone(entry.failure_reason)
+            self.assertEqual(entry.library_section, "windows")
+            self.assertEqual(entry.library_label, "Windows")
+            self.assertEqual(entry.relative_path, "Windows11.iso")
 
     def test_uses_custom_companion_config(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -70,6 +73,21 @@ class MultibootServiceTests(unittest.TestCase):
             self.assertEqual(entry.kernel_path, "/arch/boot/x86_64/vmlinuz-linux")
             self.assertEqual(entry.support_status, IsoSupportStatus.UNTESTED)
 
+    def test_maps_legacy_library_subfolders_into_primary_sections(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "iso-library"
+            tools_root = root / "tools"
+            tools_root.mkdir(parents=True)
+            iso = tools_root / "rescue.iso"
+            iso.write_bytes(b"x")
+
+            entry = self.service.profile_iso(iso, root)
+
+            self.assertEqual(entry.library_section, "tools")
+            self.assertEqual(entry.category, IsoCategory.TOOLS)
+            self.assertEqual(entry.relative_path, "tools/rescue.iso")
+            self.assertEqual(entry.support_status, IsoSupportStatus.UNTESTED)
+
     def test_marks_unknown_linux_as_unsupported_kernel(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "isos" / "linux"
@@ -97,6 +115,19 @@ class MultibootServiceTests(unittest.TestCase):
             self.assertEqual(entry.category, IsoCategory.OTHER)
             self.assertEqual(entry.support_status, IsoSupportStatus.UNSUPPORTED)
             self.assertEqual(entry.failure_reason, "incompatible ISO type")
+            self.assertEqual(entry.library_section, "legacy")
+
+    def test_scan_isos_deduplicates_duplicate_roots(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "isos" / "windows"
+            root.mkdir(parents=True)
+            iso = root / "Windows11.iso"
+            iso.write_bytes(b"x")
+
+            entries = self.service.scan_isos([root, root])
+
+            self.assertEqual(len(entries), 1)
+            self.assertEqual(entries[0].name, "Windows11.iso")
 
 
 if __name__ == "__main__":

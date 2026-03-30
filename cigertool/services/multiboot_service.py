@@ -10,11 +10,20 @@ from ..models import BootStrategy, IsoCategory, IsoEntry, IsoProfile, IsoSupport
 
 
 class MultibootService:
+    _SECTION_ORDER = {
+        "windows": 0,
+        "linux": 1,
+        "tools": 2,
+        "legacy": 3,
+        "other": 4,
+    }
+
     def __init__(self, logger: logging.Logger | None = None) -> None:
         self.logger = logger or get_logger()
 
     def scan_isos(self, roots: list[Path]) -> list[IsoEntry]:
         found: list[IsoEntry] = []
+        seen: set[str] = set()
         for root in roots:
             if not root.exists():
                 continue
@@ -23,8 +32,12 @@ class MultibootService:
                     if not filename.lower().endswith(".iso"):
                         continue
                     path = Path(current_root) / filename
+                    key = self._dedupe_key(path)
+                    if key in seen:
+                        continue
+                    seen.add(key)
                     found.append(self.profile_iso(path, root))
-        return sorted(found, key=lambda item: (item.category.value, item.name.lower()))
+        return sorted(found, key=self._sort_key)
 
     def profile_iso(self, path: Path, root: Path | None = None) -> IsoEntry:
         try:
@@ -32,7 +45,8 @@ class MultibootService:
         except OSError:
             size = 0
 
-        category = self._detect_category(path, root)
+        source_root, library_root, library_section, relative_path = self._classify_library(path, root)
+        category = self._detect_category(path, library_section)
         profile = self._detect_profile(path, category)
         strategy = self._detect_strategy(profile)
         companion_config = self._find_companion_grub(path)
@@ -42,6 +56,15 @@ class MultibootService:
         efi_boot_path: str | None = None
         support_status = IsoSupportStatus.UNTESTED
         failure_reason: str | None = None
+
+        notes.append(f"ISO Library bolumu: {self._section_label(library_section)}")
+        if library_root and library_root != source_root:
+            notes.append(f"Kutuphane koku: {library_root}")
+        elif source_root:
+            notes.append(f"Kaynak kok: {source_root}")
+
+        if relative_path:
+            notes.append(f"Goreli yol: {relative_path}")
 
         if companion_config:
             strategy = BootStrategy.CUSTOM_CONFIG
@@ -75,6 +98,7 @@ class MultibootService:
             support_status = self._safe_enum(IsoSupportStatus, sidecar.get("support_status"), support_status)
             failure_reason = sidecar.get("failure_reason", failure_reason)
             custom_note = sidecar.get("note")
+            notes.append("Yan dosya ile ISO profili gecersiz kilindi ve yeniden tanimlandi.")
             if custom_note:
                 notes.append(str(custom_note))
 
@@ -106,6 +130,10 @@ class MultibootService:
             name=path.name,
             path=str(path),
             size_bytes=size,
+            source_root=source_root,
+            library_root=library_root,
+            library_section=library_section,
+            relative_path=relative_path,
             category=category,
             profile=profile,
             boot_strategy=strategy,
@@ -119,7 +147,85 @@ class MultibootService:
         )
 
     @staticmethod
-    def _detect_category(path: Path, root: Path | None) -> IsoCategory:
+    def _dedupe_key(path: Path) -> str:
+        try:
+            return str(path.resolve()).lower()
+        except OSError:
+            return str(path).lower()
+
+    @classmethod
+    def _sort_key(cls, item: IsoEntry) -> tuple[int, int, str, str]:
+        support_order = {
+            IsoSupportStatus.SUPPORTED: 0,
+            IsoSupportStatus.UNTESTED: 1,
+            IsoSupportStatus.UNSUPPORTED: 2,
+        }
+        return (
+            cls._SECTION_ORDER.get(item.library_section, 99),
+            support_order.get(item.support_status, 99),
+            item.relative_path or item.name.lower(),
+            item.name.lower(),
+        )
+
+    @staticmethod
+    def _path_relative_to(path: Path, root: Path) -> str | None:
+        try:
+            relative = path.resolve().relative_to(root.resolve())
+        except (OSError, ValueError):
+            return None
+        return str(relative).replace("\\", "/")
+
+    @classmethod
+    def _classify_library(cls, path: Path, root: Path | None) -> tuple[str | None, str | None, str, str | None]:
+        source_root = str(root.resolve()) if root and root.exists() else (str(root) if root else None)
+        library_root = source_root
+        library_section = "other"
+        relative_path = cls._path_relative_to(path, root) if root else None
+
+        if root:
+            root_parts = [part.lower() for part in root.parts]
+            relative_parts = [part.lower() for part in Path(relative_path).parts] if relative_path else []
+
+            if "isos" in root_parts:
+                library_root = str(root.resolve())
+                try:
+                    idx = len(root_parts) - 1 - root_parts[::-1].index("isos")
+                except ValueError:
+                    idx = -1
+                if idx >= 0 and idx + 1 < len(root_parts) and root_parts[idx + 1] in {"windows", "linux", "tools"}:
+                    library_section = root_parts[idx + 1]
+                elif relative_parts and relative_parts[0] in {"windows", "linux", "tools"}:
+                    library_section = relative_parts[0]
+                else:
+                    library_section = "other"
+            elif root.name.lower() == "iso-library":
+                library_root = str(root.resolve())
+                if relative_parts and relative_parts[0] in {"windows", "linux", "tools"}:
+                    library_section = relative_parts[0]
+                else:
+                    library_section = "legacy"
+
+        return source_root, library_root, library_section, relative_path
+
+    @classmethod
+    def _section_label(cls, section: str) -> str:
+        labels = {
+            "windows": "Windows",
+            "linux": "Linux",
+            "tools": "Araclar",
+            "legacy": "Legacy",
+            "other": "Diger",
+        }
+        return labels.get(section, section.title())
+
+    @staticmethod
+    def _detect_category(path: Path, library_section: str) -> IsoCategory:
+        if library_section == "windows":
+            return IsoCategory.WINDOWS
+        if library_section == "linux":
+            return IsoCategory.LINUX
+        if library_section == "tools":
+            return IsoCategory.TOOLS
         rendered = str(path).lower()
         parts = [part.lower() for part in path.parts]
         if any(part == "windows" for part in parts) or any(token in rendered for token in ("windows", "win10", "win11", "server")):
@@ -128,8 +234,6 @@ class MultibootService:
             return IsoCategory.LINUX
         if any(part == "tools" for part in parts):
             return IsoCategory.TOOLS
-        if root and root.name.lower() == "isos":
-            return IsoCategory.OTHER
         return IsoCategory.OTHER
 
     @staticmethod

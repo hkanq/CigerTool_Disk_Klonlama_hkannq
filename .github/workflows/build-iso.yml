@@ -1,19 +1,20 @@
-name: Build CigerTool WinPE ISO
+name: Build Legacy WinPE ISO
 
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
     tags:
       - "v*"
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 permissions:
   contents: write
 
 jobs:
-  build-winpe-iso:
-    runs-on: windows-latest
+  build-legacy-winpe-iso:
+    runs-on: windows-2025
     timeout-minutes: 150
     env:
       MSYSTEM: MSYS
@@ -120,10 +121,10 @@ jobs:
         run: |
           python -m unittest discover -s tests -p "test_*.py"
 
-      - name: Install ADK and WinPE Add-on
+      - name: Install ADK and WinPE Add-on (Legacy)
         shell: powershell
         run: |
-          .\build\scripts\install_adk.ps1
+          .\build\scripts\legacy\install_adk.ps1
 
       - name: Build desktop application
         shell: powershell
@@ -144,14 +145,14 @@ jobs:
           }
           & $env:CIGERTOOL_MSYS_BASH --version
 
-      - name: Build WinPE ISO
+      - name: Build Legacy WinPE ISO
         shell: powershell
         env:
           CIGERTOOL_MSYS_BASH: ${{ steps.resolve-msys-bash.outputs.bash_path }}
         run: |
-          .\build\scripts\build_winpe_iso.ps1 -OutputIso "artifacts\CigerTool-by-hkannq.iso" -RequirePrebootMenu
+          .\build\scripts\legacy\build_winpe_iso.ps1 -OutputIso "artifacts\CigerTool-by-hkannq.iso" -RequirePrebootMenu
 
-      - name: Summarize build log on failure
+      - name: Summarize legacy build log on failure
         if: failure()
         shell: powershell
         run: |
@@ -164,11 +165,11 @@ jobs:
           }
           $tail = Get-Content $logPath -Tail 200
           $annotationTail = (($tail | Select-Object -Last 20) -join " | ").Replace("`r", " ").Replace("`n", " ")
-          Write-Host "===== WINPE BUILD LOG TAIL ====="
+          Write-Host "===== LEGACY WINPE BUILD LOG TAIL ====="
           $tail | ForEach-Object { Write-Host $_ }
           Write-Output "::error title=WinPE build log tail::$annotationTail"
           @(
-            "## WinPE Build Log Tail"
+            "## Legacy WinPE Build Log Tail"
             ""
             '```text'
             ($tail -join [Environment]::NewLine)

@@ -1,0 +1,9 @@
+{
+  "name": "My Portable Tool",
+  "category": "User Tool",
+  "description": "Kendi portable uygulamaniz.",
+  "entry": "MyTool.exe",
+  "arguments": [],
+  "working_directory": ".",
+  "layer": "USER"
+}
