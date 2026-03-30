@@ -1306,7 +1306,6 @@ function Build-IsoWithXorriso {
         "-e $quotedEfiImage",
         "-no-emul-boot",
         "-isohybrid-gpt-basdat",
-        "-udf",
         "-joliet-long",
         "-relaxed-filenames",
         "-o $quotedIso",
