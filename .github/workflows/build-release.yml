@@ -1,0 +1,83 @@
+name: Build CigerTool Release ISO
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-release:
+    runs-on: windows-2025
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate workspace input
+        shell: powershell
+        run: |
+          if (-not (Test-Path -LiteralPath "inputs\workspace\install.wim")) {
+            throw "Release build icin gereken girdi bulunamadi: inputs\workspace\install.wim"
+          }
+          Get-Item "inputs\workspace\install.wim" | Format-List Name,Length,LastWriteTime
+
+      - name: Install Python dependencies
+        shell: powershell
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Build release ISO
+        shell: powershell
+        run: |
+          .\build\build_cigertool_release.ps1 -WorkspaceWimPath "inputs\workspace\install.wim"
+
+      - name: Validate release artifacts
+        shell: powershell
+        run: |
+          $requiredPaths = @(
+            "artifacts\CigerTool-Workspace.iso",
+            "artifacts\CigerTool-Workspace.iso.sha256",
+            "artifacts\CigerTool-Workspace.release.json",
+            "artifacts\CigerTool-Workspace-debug.zip"
+          )
+          foreach ($path in $requiredPaths) {
+            if (-not (Test-Path -LiteralPath $path)) {
+              throw "Release artifact eksik: $path"
+            }
+          }
+          Get-Item "artifacts\CigerTool-Workspace.iso" | Format-List Name,Length,LastWriteTime
+
+      - name: Upload release ISO
+        uses: actions/upload-artifact@v4
+        with:
+          name: CigerTool-Workspace
+          path: |
+            artifacts/CigerTool-Workspace.iso
+            artifacts/CigerTool-Workspace.iso.sha256
+            artifacts/CigerTool-Workspace.release.json
+            artifacts/CigerTool-Workspace-debug.zip
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cigertool-build-logs
+          path: artifacts/logs
+          if-no-files-found: warn
+          retention-days: 30

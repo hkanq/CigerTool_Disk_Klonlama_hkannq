@@ -30,7 +30,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..app_context import AppContext
-from ..config import APP_NAME, LEGACY_ISO_LIBRARY_ROOT
+from ..config import APP_NAME
 from ..logger import tail_log
 from ..models import CloneMode, Disk, IsoEntry, OperationPlan, ToolEntry, human_bytes
 from .style import STYLE_SHEET
@@ -80,7 +80,7 @@ class MainWindow(QMainWindow):
 
         title = QLabel("CigerTool")
         title.setObjectName("Title")
-        subtitle = QLabel("Canli ortamda clone, recovery, tanilama ve ISO kutuphanesi")
+        subtitle = QLabel("Hazir workspace icinde clone, recovery, araclar ve ISO kutuphanesi")
         subtitle.setObjectName("Subtitle")
         layout.addWidget(title)
         layout.addWidget(subtitle)
@@ -112,9 +112,9 @@ class MainWindow(QMainWindow):
         self.refresh_progress.hide()
         layout.addWidget(self.refresh_progress)
 
-        self.winpe_label = QLabel("")
-        self.winpe_label.setObjectName("Subtitle")
-        layout.addWidget(self.winpe_label)
+        self.runtime_label = QLabel("")
+        self.runtime_label.setObjectName("Subtitle")
+        layout.addWidget(self.runtime_label)
         return frame
 
     def _build_pages(self) -> QWidget:
@@ -280,7 +280,7 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(page)
         title = QLabel("ISO Yonetimi")
         title.setObjectName("Title")
-        info = QLabel("/isos/windows, /isos/linux ve /isos/tools otomatik taranir. Legacy iso-library okunur ama varsayilan yol degildir.")
+        info = QLabel("USB acilisinda /isos/windows, /isos/linux ve /isos/tools dinamik olarak taranir.")
         info.setObjectName("Subtitle")
         self.iso_table = QTableWidget(0, 8)
         self.iso_table.setHorizontalHeaderLabels(["ISO", "Durum", "Kutuphane", "Kategori", "Profil", "Boot", "Boyut", "Yol"])
@@ -387,7 +387,7 @@ class MainWindow(QMainWindow):
             f"Startup durumu: {startup_state}",
             f"Startup notu: {startup_message}",
             "Odak senaryo: buyuk HDD -> kucuk SSD Smart Clone",
-            "Runtime: canli ortam kabugu + otomatik uygulama baslatma",
+            "Runtime: hazir workspace masaustu + otomatik uygulama baslatma",
             "Multiboot: /isos/windows, /isos/linux ve /isos/tools klasorleri taranir.",
             "Not: Smart Clone dosya-bazli tasima + resize + boot fix mantigi ile planlanir.",
         ]
@@ -515,7 +515,6 @@ class MainWindow(QMainWindow):
             "smart": self.context.smart_service.snapshot(),
             "log": tail_log(),
             "startup_status": self.context.system_service.read_runtime_status(),
-            "is_winpe": self.context.system_service.is_winpe(),
             "runtime_mode": self.context.system_service.runtime_mode(),
             "runtime_root": str(self.context.system_service.runtime_root()),
             "scripts_root": str(self.context.system_service.scripts_root()),
@@ -523,7 +522,6 @@ class MainWindow(QMainWindow):
             "log_root": str(self.context.system_service.log_root()),
             "runtime_status_path": str(self.context.system_service.runtime_status_path()),
             "browser_root": str(self.context.system_service.default_file_browser_root()),
-            "adk_installed": self.context.system_service.adk_installed(),
             "tool_roots": [str(path) for path in self.context.system_service.tool_roots()],
             "iso_roots": [str(path) for path in self.context.system_service.iso_roots()],
         }
@@ -543,12 +541,11 @@ class MainWindow(QMainWindow):
         self.smart_output.setText(str(snapshot["smart"]))
         self.log_view.setText(snapshot["log"])
         runtime_labels = {
-            "liveos": "Canli Ortam",
-            "winpe": "Gecis Katmani",
+            "workspace": "Workspace",
             "windows": "Windows",
         }
         runtime_text = runtime_labels.get(snapshot["runtime_mode"], snapshot["runtime_mode"])
-        self.winpe_label.setText(
+        self.runtime_label.setText(
             f"Ortam: {runtime_text} | "
             f"Log: {Path(snapshot['log_path']).name}"
         )
@@ -605,9 +602,6 @@ class MainWindow(QMainWindow):
             f"Log kok dizini: {snapshot['log_root']}",
             f"Dosya yoneticisi koku: {snapshot['browser_root']}",
             "",
-            f"WinPE: {'Evet' if snapshot['is_winpe'] else 'Hayir'}",
-            f"ADK kurulu: {'Evet' if snapshot['adk_installed'] else 'Hayir'}",
-            "",
             f"Startup state: {self.cached_startup_status.get('state', '-')}",
             f"Startup stage: {self.cached_startup_status.get('stage', '-')}",
             f"Startup mesaj: {self.cached_startup_status.get('message', '-')}",
@@ -617,8 +611,6 @@ class MainWindow(QMainWindow):
             "",
             "ISO roots:",
             *[f"- {item}" for item in snapshot["iso_roots"]],
-            "",
-            f"Legacy kutuphane: {LEGACY_ISO_LIBRARY_ROOT}",
         ]
         self.settings_summary.setText("\n".join(lines))
 
@@ -652,7 +644,7 @@ class MainWindow(QMainWindow):
         QMessageBox.warning(
             self,
             "Startup Uyarisi",
-            f"Canli oturum acildi ancak startup tam saglikli degil.\n\n{message}",
+            f"Workspace acildi ancak startup tam saglikli degil.\n\n{message}",
         )
 
     def _update_iso_details(self) -> None:

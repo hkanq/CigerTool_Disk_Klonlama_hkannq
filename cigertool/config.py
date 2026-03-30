@@ -7,13 +7,13 @@ import tempfile
 
 
 APP_NAME = "CigerTool by hkannq"
-ISO_NAME = "CigerTool-by-hkannq.iso"
+ISO_NAME = "CigerTool-Workspace.iso"
 APP_DIR_NAME = "CigerTool"
 COMPANY_NAME = "hkannq"
 DEFAULT_THEME = "turkuaz"
 DEFAULT_LANGUAGE = "tr"
 DEFAULT_LOG_FILENAME = "cigertool.log"
-DEFAULT_RUNTIME_STATUS_FILENAME = "liveos-status.json"
+DEFAULT_RUNTIME_STATUS_FILENAME = "workspace-status.json"
 
 RUNTIME_MODE_ENV = "CIGERTOOL_RUNTIME"
 RUNTIME_ROOT_ENV = "CIGERTOOL_RUNTIME_ROOT"
@@ -29,21 +29,15 @@ APP_ROOT = Path(__file__).resolve().parent
 PROJECT_ROOT = APP_ROOT.parent
 TOOLS_ROOT = PROJECT_ROOT / "tools"
 ASSETS_ROOT = PROJECT_ROOT / "cigertool" / "assets"
-WINPE_ROOT = PROJECT_ROOT / "winpe"
+WORKSPACE_ROOT = PROJECT_ROOT / "workspace"
+WORKSPACE_PAYLOAD_ROOT = WORKSPACE_ROOT / "payload"
 BUILD_ROOT = PROJECT_ROOT / "build"
 ARTIFACT_ROOT = PROJECT_ROOT / "artifacts"
-ISOS_ROOT = PROJECT_ROOT / "isos"
-ISOS_WINDOWS_ROOT = ISOS_ROOT / "windows"
-ISOS_LINUX_ROOT = ISOS_ROOT / "linux"
-ISOS_TOOLS_ROOT = ISOS_ROOT / "tools"
-ISO_LIBRARY_ROOT = ISOS_ROOT
-LEGACY_ISO_LIBRARY_ROOT = PROJECT_ROOT / "iso-library"
+ISO_LIBRARY_ROOT = PROJECT_ROOT / "iso-library"
+ISO_LIBRARY_WINDOWS_ROOT = ISO_LIBRARY_ROOT / "windows"
+ISO_LIBRARY_LINUX_ROOT = ISO_LIBRARY_ROOT / "linux"
+ISO_LIBRARY_TOOLS_ROOT = ISO_LIBRARY_ROOT / "tools"
 LOG_PATH = Path(tempfile.gettempdir()) / "cigertool.log"
-
-ADK_ROOT_CANDIDATES = [
-    Path(r"C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit"),
-    Path(r"C:\Program Files\Windows Kits\10\Assessment and Deployment Kit"),
-]
 
 
 @dataclass(slots=True)
@@ -52,18 +46,6 @@ class AppSettings:
     language: str = DEFAULT_LANGUAGE
     dry_run: bool = True
     temp_dir: Path = Path(tempfile.gettempdir()) / "cigertool"
-
-
-def resolve_adk_root() -> Path | None:
-    env_value = os.environ.get("CIGERTOOL_ADK_ROOT")
-    if env_value:
-        candidate = Path(env_value)
-        if candidate.exists():
-            return candidate
-    for candidate in ADK_ROOT_CANDIDATES:
-        if candidate.exists():
-            return candidate
-    return None
 
 
 def _path_from_env(name: str, *, must_exist: bool = True) -> Path | None:
@@ -93,8 +75,6 @@ def resolve_runtime_mode() -> str:
     configured = os.environ.get(RUNTIME_MODE_ENV)
     if configured:
         return configured.strip().lower()
-    if os.environ.get("SYSTEMDRIVE", "").upper() == "X:":
-        return "winpe"
     return "windows"
 
 
@@ -111,7 +91,7 @@ def candidate_script_roots() -> list[Path]:
             env_root,
             runtime_root / APP_DIR_NAME / "scripts",
             runtime_root / "app" / APP_DIR_NAME / "scripts",
-            BUILD_ROOT / "scripts",
+            APP_ROOT / "scripts",
         ]
         if candidate is not None
     ]
@@ -140,8 +120,8 @@ def resolve_log_root() -> Path:
         return explicit_root
 
     runtime_root = resolve_runtime_root()
-    if resolve_runtime_mode() == "liveos":
-        return runtime_root / "liveos" / "logs"
+    if resolve_runtime_mode() == "workspace":
+        return runtime_root / "logs"
     return Path(tempfile.gettempdir())
 
 

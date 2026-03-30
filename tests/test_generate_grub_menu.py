@@ -8,25 +8,14 @@ from pathlib import Path
 
 
 class GenerateGrubMenuTests(unittest.TestCase):
-    def test_generated_menu_contains_iso_library_sections_and_failure_reasons(self) -> None:
+    def test_generated_menu_uses_workspace_entry_and_dynamic_iso_scanning(self) -> None:
         project_root = Path(__file__).resolve().parents[1]
-        script = project_root / "build" / "scripts" / "generate_grub_menu.py"
+        script = project_root / "build" / "internal" / "render_boot_menu.py"
 
         with tempfile.TemporaryDirectory() as tmp:
             media_root = Path(tmp) / "media"
-            (media_root / "isos" / "windows").mkdir(parents=True)
-            (media_root / "isos" / "linux").mkdir(parents=True)
-            (media_root / "isos" / "tools").mkdir(parents=True)
-            (media_root / "iso-library").mkdir(parents=True)
-            (media_root / "isos" / "windows" / "Windows11.iso").write_bytes(b"x")
-            (media_root / "isos" / "linux" / "mystery.iso").write_bytes(b"x")
-            (media_root / "isos" / "tools" / "rescue.iso").write_bytes(b"x")
-            (media_root / "isos" / "tools" / "rescue.cigertool.json").write_text(
-                '{"efi_boot_path":"/EFI/custom/bootx64.efi"}',
-                encoding="utf-8",
-            )
-            (media_root / "iso-library" / "random.iso").write_bytes(b"x")
             output = media_root / "EFI" / "CigerTool" / "grub.cfg"
+            media_root.mkdir(parents=True)
 
             subprocess.run(
                 [
@@ -36,6 +25,12 @@ class GenerateGrubMenuTests(unittest.TestCase):
                     str(media_root),
                     "--output",
                     str(output),
+                    "--workspace-loader-path",
+                    "/EFI/Microsoft/Boot/bootmgfw.efi",
+                    "--workspace-bcd-path",
+                    "/EFI/Microsoft/Boot/BCD",
+                    "--workspace-vhd-path",
+                    "/workspace/CigerToolWorkspace.vhdx",
                     "--wimboot-path",
                     "/EFI/CigerTool/wimboot",
                 ],
@@ -44,16 +39,22 @@ class GenerateGrubMenuTests(unittest.TestCase):
             )
 
             content = output.read_text(encoding="utf-8")
-            self.assertIn('menuentry "CigerTool Live"', content)
+            self.assertIn('menuentry "CigerTool Workspace"', content)
             self.assertIn('submenu "ISO Library"', content)
-            self.assertIn('submenu "Windows ISO\'lari"', content)
-            self.assertIn('submenu "Arac ve Kurtarma ISO\'lari"', content)
-            self.assertIn('submenu "Desteklenmeyen ISO\'lar"', content)
-            self.assertIn("newc:boot.wim:/sources/boot.wim", content)
-            self.assertIn("(loop)/EFI/custom/bootx64.efi", content)
-            self.assertIn("missing boot files", content)
-            self.assertIn("unsupported kernel", content)
-            self.assertIn("incompatible ISO type", content)
+            self.assertIn('menuentry "ISO Library kullanimi"', content)
+            self.assertIn('/isos/windows/*.iso', content)
+            self.assertIn('/isos/linux/*.iso', content)
+            self.assertIn('/isos/tools/*.iso', content)
+            self.assertIn("/workspace/CigerToolWorkspace.vhdx", content)
+            self.assertIn("/EFI/Microsoft/Boot/BCD", content)
+            self.assertIn("chainloader /EFI/Microsoft/Boot/bootmgfw.efi", content)
+            self.assertIn("search --no-floppy --set=cg_root --file /CigerTool.workspace.json", content)
+            self.assertIn('submenu "Boot Diagnostics"', content)
+            self.assertIn("Setup veya OOBE kullanmaz", content)
+            self.assertIn('regexp --set=1 cg_iso_title', content)
+            self.assertIn("uygun kernel bulunamadi", content)
+            self.assertIn("uygun boot dosyalari bulunamadi", content)
+            self.assertNotIn('menuentry "CigerTool Live"', content)
 
 
 if __name__ == "__main__":

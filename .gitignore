@@ -11,8 +11,8 @@ artifacts/
 .mypy_cache/
 *.spec
 *.wim
+*.vhd
+*.vhdx
 *.iso
 *.log
 mount/
-winpe-work/
-

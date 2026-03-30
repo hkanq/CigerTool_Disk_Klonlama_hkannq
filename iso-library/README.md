@@ -1,20 +1,17 @@
-# iso-library
+# ISO Library Kaynağı
 
-Bu klasor, eski ISO Library yapisi icin geriye donuk uyumluluk yoludur.
+Bu klasör, build sırasında USB içindeki `/isos/*` yapısına taşınan kaynak ISO kütüphanesidir.
 
-Beklenen kullanim:
+Kaynak klasörler:
 
-- Yeni kullanimda ISO dosyalarini `isos/windows`, `isos/linux` veya `isos/tools` altina kopyala
-- `iso-library/` yalnizca eski USB duzenlerini kirmamak icin okunmaya devam eder
+- `iso-library/windows`
+- `iso-library/linux`
+- `iso-library/tools`
 
-Prompt 6 itibariyla:
+Runtime karşılığı:
 
-- `iso-library/` altindaki ISO'lar hala tespit edilir
-- uygun olanlar boot menusune dahil edilir
-- ama varsayilan ve onerilen yol artik `isos/` kokudur
+- `/isos/windows`
+- `/isos/linux`
+- `/isos/tools`
 
-Mumkun olan en temiz duzen:
-
-- `isos/windows`
-- `isos/linux`
-- `isos/tools`
+Son kullanıcı USB'yi yazdıktan sonra bu runtime dizinlerine yeni ISO bırakabilir. Açılış menüsü bu dizinleri her boot'ta yeniden tarar.

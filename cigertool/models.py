@@ -212,15 +212,6 @@ class ToolEntry:
 
 
 @dataclass(slots=True)
-class SystemSnapshot:
-    disks: list[Disk]
-    is_winpe: bool
-    adk_installed: bool
-    tools: list[ToolEntry]
-    multiboot_isos: list["IsoEntry"]
-
-
-@dataclass(slots=True)
 class PathInfo:
     name: str
     path: str
@@ -261,8 +252,7 @@ class IsoEntry:
         mapping = {
             "windows": "Windows",
             "linux": "Linux",
-            "tools": "Araçlar",
-            "legacy": "Legacy",
-            "other": "Diğer",
+            "tools": "Araclar",
+            "other": "Diger",
         }
         return mapping.get(self.library_section, self.library_section.title())

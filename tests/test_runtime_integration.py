@@ -73,7 +73,7 @@ class RuntimeIntegrationTests(unittest.TestCase):
             partitions=[],
         )
 
-    def test_runtime_script_resolution_prefers_live_root(self) -> None:
+    def test_runtime_script_resolution_prefers_workspace_root(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             scripts_root = Path(temp_dir) / "scripts"
             scripts_root.mkdir(parents=True, exist_ok=True)
@@ -120,7 +120,7 @@ class RuntimeIntegrationTests(unittest.TestCase):
             windows_isos.mkdir(parents=True, exist_ok=True)
 
             env = {
-                "CIGERTOOL_RUNTIME": "liveos",
+                "CIGERTOOL_RUNTIME": "workspace",
                 "CIGERTOOL_RUNTIME_ROOT": str(runtime_root),
             }
             with mock.patch.dict(os.environ, env, clear=False):
@@ -143,11 +143,11 @@ class RuntimeIntegrationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             log_root = Path(temp_dir) / "logs"
             with mock.patch.dict(os.environ, {"CIGERTOOL_LOG_ROOT": str(log_root)}, clear=False):
-                self.assertEqual(resolve_runtime_status_path(), log_root / "liveos-status.json")
+                self.assertEqual(resolve_runtime_status_path(), log_root / "workspace-status.json")
 
     def test_system_service_reads_runtime_status_file(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            status_path = Path(temp_dir) / "liveos-status.json"
+            status_path = Path(temp_dir) / "workspace-status.json"
             payload = {"stage": "session", "state": "ready", "message": "Hazir"}
             status_path.write_text(json.dumps(payload), encoding="utf-8")
 

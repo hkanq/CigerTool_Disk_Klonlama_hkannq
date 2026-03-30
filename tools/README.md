@@ -1,8 +1,8 @@
 # Tools Layout
 
-Bu klasor, `CigerTool Live` icinde kullanilacak tasinabilir araclarin ve kullanici tarafindan eklenecek `.exe` uygulamalarinin ana kokudur.
+Bu klasor, CigerTool Workspace icinde kullanilacak tasinabilir araclarin ve kullanici tarafindan eklenecek `.exe` uygulamalarinin ana kokudur.
 
-Amaç:
+Amac:
 
 - bundled tools yapisini netlestirmek
 - portable uygulamalarin ayni USB uzerinden calisabilmesini saglamak
@@ -10,7 +10,7 @@ Amaç:
 
 ## Beklenen Klasor Yapisi
 
-Onerilen yapi su sekildedir:
+Onerilen yapi:
 
 - `tools/browser/`
 - `tools/diagnostics/`
@@ -19,7 +19,7 @@ Onerilen yapi su sekildedir:
 - `tools/network/`
 - `tools/user/`
 
-Her arac tercihen kendi klasorunde tutulmalidir:
+Her arac tercihen kendi klasorunde tutulur:
 
 - `tools/browser/chrome-portable/ChromePortable.exe`
 - `tools/diagnostics/cpu-z/cpuz_x64.exe`
@@ -51,12 +51,12 @@ Alanlar:
 - `name`: Launcher'da gorunecek ad
 - `category`: `Browser`, `Diagnostics`, `Benchmark`, `Storage`, `Network`, `User Tool`
 - `description`: Arac aciklamasi
-- `entry`: calistirilacak `.exe` dosyasi, manifest klasorune gore goreli yol
+- `entry`: calistirilacak `.exe` dosyasi
 - `arguments`: istege bagli arguman listesi
 - `working_directory`: istege bagli calisma dizini
 - `layer`: genelde `USER`, onceden paketli araclar icin `PRELOADED`
 
-## Manifest Yoksa Ne Olur?
+## Manifest Yoksa
 
 Manifest yoksa launcher yine de `.exe` dosyalarini tarar:
 
@@ -65,18 +65,17 @@ Manifest yoksa launcher yine de `.exe` dosyalarini tarar:
 
 Bu fallback sayesinde kullanici sadece `.exe` kopyalayarak da arac ekleyebilir.
 
-## Canli Ortam Davranisi
+## Runtime Davranisi
 
-- `build/scripts/build_liveos_foundation.ps1` bu klasoru oldugu gibi `build-output/liveos/layout/tools` altina kopyalar
-- transitional ISO build path de `tools/` icerigini runtime medyasina kopyalar
-- live session sirasinda `CIGERTOOL_TOOLS_ROOT` ortam degiskeni set edilirse uygulama bunu tercih eder
+- final build akisi bu klasoru USB layout altina `tools/` olarak kopyalar
+- `CIGERTOOL_TOOLS_ROOT` ortam degiskeni varsa uygulama once onu kullanir
 - aksi halde uygulama runtime `tools/` kokunu ve repo `tools/` kokunu tarar
 
 ## Onerilen Kullanim
 
 1. Araci uygun kategori klasorune koy
 2. Gerekirse yanina `cigertool-tool.json` ekle
-3. Live ortamda `Arac Kutusu` ekranini yenile
+3. Workspace icinde `Arac Kutusu` ekranini yenile
 4. Araci launcher uzerinden ac
 
 ## Not
