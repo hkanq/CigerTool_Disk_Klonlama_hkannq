@@ -1,6 +1,6 @@
-# CigerTool by hkannq
+# CigerTool V2
 
-CigerTool, WinPE tabanlı çalışan grafik arayüzlü bir disk klonlama, kurtarma ve bakım platformudur. Ana hedefi, özellikle büyük bir HDD'deki Windows kurulumunu daha küçük bir SSD'ye güvenli, yönlendirmeli ve anlaşılır bir akışla taşımaktır.
+CigerTool, Disk klonlama ve teknik usb yazılımlarının zorluklarından dolayı hkannq tarafından, tamamen AI ile yapılmış olup WinPE tabanlı çalışan grafik arayüzlü bir disk klonlama, kurtarma ve bakım platformudur. Ana hedefi, özellikle büyük bir HDD'deki Windows kurulumunu daha küçük bir SSD'ye güvenli, yönlendirmeli ve anlaşılır bir akışla taşımaktır.
 
 Uygulama yalnızca klon alma mantığıyla sınırlı değildir. Aynı zamanda önyükleme onarımı, disk sağlığı görüntüleme, araç kutusu kullanımı, dosya yönetimi ve USB üzerinde genişletilebilir ISO kütüphanesi mantığı da sunar.
 
