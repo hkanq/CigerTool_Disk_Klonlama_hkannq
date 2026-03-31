@@ -848,17 +848,18 @@ try {
     Copy-WorkspacePayloadOverlay -PayloadSourceRoot $payloadSourceRoot -WorkspaceWindowsRoot $workspaceDriveRoot
     Set-WorkspaceOfflineRegistry -WorkspaceWindowsRoot $workspaceDriveRoot
 
+    $efiDriveLetter = Get-FreeDriveLetter -PreferredLetters @("S", "Y", "X", "Z", "R", "Q", "P", "O") -ExcludedLetters @($workspaceDriveLetter)
     Invoke-DiskPartScript -Lines @(
         "create vdisk file=""$efiVhdPath"" maximum=256 type=fixed",
         "select vdisk file=""$efiVhdPath""",
         "attach vdisk",
         "convert gpt noerr",
         "create partition efi size=128",
-        "format quick fs=fat32 label=""SYSTEM"""
+        "format quick fs=fat32 label=""SYSTEM""",
+        "assign letter=$efiDriveLetter"
     )
-
-    $efiDriveLetter = Mount-VhdAndAssignDriveLetter -VhdPath $efiVhdPath -PreferredLetters @("S", "Y", "X", "Z", "R", "Q", "P", "O") -PartitionRole "EfiSystem" -ExcludedLetters @($workspaceDriveLetter) -Label "EFI VHD"
     $efiDriveRoot = Get-DriveRoot -DriveLetter $efiDriveLetter
+    Write-BuildLog "EFI VHD icin gecici surucu harfi secildi: $efiDriveLetter"
 
     Ensure-VhdMounted -VhdPath $workspaceVhdPath -DriveLetter $workspaceDriveLetter -PartitionRole "BasicData" -Label "Workspace VHD"
     Ensure-VhdMounted -VhdPath $efiVhdPath -DriveLetter $efiDriveLetter -PartitionRole "EfiSystem" -Label "EFI VHD"
