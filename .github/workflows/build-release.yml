@@ -1,10 +1,23 @@
-name: Build CigerTool Release ISO
+name: Build CigerTool Release
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      build_mode:
+        description: "plan = sadece plan/staging dogrulama, release = gercek ISO build"
+        required: true
+        default: "release"
+        type: choice
+        options:
+          - plan
+          - release
+      workspace_wim_url:
+        description: "Opsiyonel install.wim indirme URL'si"
+        required: false
+        type: string
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -16,6 +29,11 @@ jobs:
   build-release:
     runs-on: windows-2025
     timeout-minutes: 120
+    env:
+      WORKFLOW_BUILD_MODE: ${{ inputs.build_mode }}
+      WORKFLOW_WIM_URL: ${{ inputs.workspace_wim_url }}
+      DEFAULT_WORKSPACE_WIM_URL: ${{ secrets.WORKSPACE_WIM_URL }}
+      WORKSPACE_WIM_AUTH_HEADER: ${{ secrets.WORKSPACE_WIM_AUTH_HEADER }}
 
     steps:
       - name: Checkout
@@ -26,13 +44,74 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Validate workspace input
+      - name: Prepare release logs root
         shell: powershell
         run: |
-          if (-not (Test-Path -LiteralPath "inputs\workspace\install.wim")) {
-            throw "Release build icin gereken girdi bulunamadi: inputs\workspace\install.wim"
+          New-Item -ItemType Directory -Force -Path "artifacts\logs" | Out-Null
+
+      - name: Resolve workspace input
+        id: workspace_input
+        shell: powershell
+        run: |
+          $mode = "plan"
+          if ($env:GITHUB_EVENT_NAME -eq "workflow_dispatch" -and -not [string]::IsNullOrWhiteSpace($env:WORKFLOW_BUILD_MODE)) {
+            $mode = $env:WORKFLOW_BUILD_MODE.Trim().ToLowerInvariant()
           }
-          Get-Item "inputs\workspace\install.wim" | Format-List Name,Length,LastWriteTime
+
+          $targetDir = "inputs\workspace"
+          $targetPath = Join-Path $targetDir "install.wim"
+          $logPath = "artifacts\logs\workspace-input.log"
+          New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
+
+          $resolvedUrl = ""
+          if (-not [string]::IsNullOrWhiteSpace($env:WORKFLOW_WIM_URL)) {
+            $resolvedUrl = $env:WORKFLOW_WIM_URL.Trim()
+          } elseif (-not [string]::IsNullOrWhiteSpace($env:DEFAULT_WORKSPACE_WIM_URL)) {
+            $resolvedUrl = $env:DEFAULT_WORKSPACE_WIM_URL.Trim()
+          }
+
+          $source = ""
+          $hasRealWim = $false
+
+          if (Test-Path -LiteralPath $targetPath) {
+            $source = "repo"
+            $hasRealWim = $true
+          } elseif (-not [string]::IsNullOrWhiteSpace($resolvedUrl)) {
+            $headers = @{}
+            if (-not [string]::IsNullOrWhiteSpace($env:WORKSPACE_WIM_AUTH_HEADER)) {
+              $parts = $env:WORKSPACE_WIM_AUTH_HEADER.Split(":", 2)
+              if ($parts.Count -eq 2) {
+                $headers[$parts[0].Trim()] = $parts[1].Trim()
+              }
+            }
+
+            Write-Host "Workspace WIM indiriliyor: $resolvedUrl"
+            Invoke-WebRequest -Uri $resolvedUrl -OutFile $targetPath -Headers $headers
+            $source = "download"
+            $hasRealWim = $true
+          } elseif ($mode -eq "plan") {
+            New-Item -ItemType File -Force -Path $targetPath | Out-Null
+            $source = "placeholder"
+            $hasRealWim = $false
+          } else {
+            throw "Release build icin gereken girdi bulunamadi. Beklenen yol: inputs\\workspace\\install.wim. Alternatif olarak workflow_dispatch ile workspace_wim_url veya WORKSPACE_WIM_URL secret'i verin."
+          }
+
+          $item = Get-Item -LiteralPath $targetPath
+          @(
+            "mode=$mode"
+            "source=$source"
+            "path=$($item.FullName)"
+            "size=$($item.Length)"
+            "has_real_wim=$hasRealWim"
+          ) | Set-Content -Path $logPath -Encoding utf8
+
+          "build_mode=$mode" >> $env:GITHUB_OUTPUT
+          "workspace_source=$source" >> $env:GITHUB_OUTPUT
+          "workspace_path=$($item.FullName)" >> $env:GITHUB_OUTPUT
+          "has_real_wim=$hasRealWim" >> $env:GITHUB_OUTPUT
+
+          Get-Item $targetPath | Format-List Name,Length,LastWriteTime
 
       - name: Install Python dependencies
         shell: powershell
@@ -40,12 +119,42 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
+      - name: Build release plan
+        if: steps.workspace_input.outputs.build_mode == 'plan'
+        shell: powershell
+        run: |
+          .\build\build_cigertool_release.ps1 -PlanOnly -WorkspaceWimPath "inputs\workspace\install.wim"
+
       - name: Build release ISO
+        if: steps.workspace_input.outputs.build_mode == 'release'
         shell: powershell
         run: |
           .\build\build_cigertool_release.ps1 -WorkspaceWimPath "inputs\workspace\install.wim"
 
+      - name: Validate staged outputs
+        if: steps.workspace_input.outputs.build_mode == 'plan'
+        shell: powershell
+        run: |
+          $requiredPaths = @(
+            "build-output\workspace\manifests\workspace-plan.json",
+            "build-output\workspace\manifests\CigerToolWorkspace.Unattend.xml",
+            "build-output\workspace\usb-layout\CigerTool.workspace.json",
+            "build-output\workspace\usb-layout\EFI\CigerTool\grub.cfg",
+            "build-output\workspace\usb-layout\EFI\CigerTool\boot-manifest.json",
+            "build-output\workspace\workspace-stage\Program Files\CigerToolWorkspace\startup\Start-CigerToolWorkspace.ps1",
+            "build-output\workspace\workspace-stage\Program Files\CigerToolWorkspace\startup\CigerToolWorkspace.Runtime.ps1",
+            "build-output\workspace\usb-layout\isos\windows",
+            "build-output\workspace\usb-layout\isos\linux",
+            "build-output\workspace\usb-layout\isos\tools"
+          )
+          foreach ($path in $requiredPaths) {
+            if (-not (Test-Path -LiteralPath $path)) {
+              throw "Release plan dogrulama hatasi. Eksik yol: $path"
+            }
+          }
+
       - name: Validate release artifacts
+        if: steps.workspace_input.outputs.build_mode == 'release'
         shell: powershell
         run: |
           $requiredPaths = @(
@@ -61,7 +170,17 @@ jobs:
           }
           Get-Item "artifacts\CigerTool-Workspace.iso" | Format-List Name,Length,LastWriteTime
 
+      - name: Upload staged release plan
+        if: steps.workspace_input.outputs.build_mode == 'plan'
+        uses: actions/upload-artifact@v4
+        with:
+          name: cigertool-release-plan
+          path: build-output/workspace
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Upload release ISO
+        if: steps.workspace_input.outputs.build_mode == 'release'
         uses: actions/upload-artifact@v4
         with:
           name: CigerTool-Workspace

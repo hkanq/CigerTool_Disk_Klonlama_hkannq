@@ -16,6 +16,11 @@ Gercek artifact uretimi:
 
 - `build/build_cigertool_release.ps1`
 
+GitHub Actions release build:
+
+- `workflow_dispatch` ile `build-release.yml`
+- gerekirse `workspace_wim_url` girdisi veya `WORKSPACE_WIM_URL` secret'i
+
 ## Artifact'ler
 
 Birincil artifact:
@@ -35,6 +40,11 @@ Birincil artifact dagitima uygun bir USB boot ISO'sudur.
 - Kullanici ISO'yu USB'ye ISO/extract mode ile yazar
 - USB yazildiktan sonra `/isos/windows`, `/isos/linux` ve `/isos/tools` dizinleri kullanici tarafinda doldurulabilir
 - Workspace ve ISO Library ayni USB uzerinden kullanilir
+
+## CI Modu
+
+- `push` uzerinde workflow guvenli sekilde `PlanOnly` calistirir
+- gercek ISO build sadece release modunda ve erisilebilir bir `install.wim` kaynagi varsa calisir
 
 ## Startup Hook
 

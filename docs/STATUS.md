@@ -19,6 +19,9 @@
 - `liveos/`, `winpe/`, legacy build scriptleri ve eski workflow'lar kaldirildi
 - uygulama ici runtime, ayarlar ve ISO tarama dili final workspace modeline gore temizlendi
 - dokumanlar final mimariye gore yeniden yazildi
+- GitHub Actions release workflow'u iki modlu hale getirildi:
+  - `push` -> `PlanOnly`
+  - `workflow_dispatch` + WIM kaynagi -> gercek ISO build
 
 ## Ana Build Girisi
 
@@ -33,3 +36,4 @@ Plan dogrulama:
 - Gercek full build hala yonetici hakli Windows host ister
 - Gercek USB/VM boot smoke testi ayrica yapilmalidir
 - ISO profilleme bazi medya ailelerinde hala heuristic temellidir
+- GitHub Actions uzerinde gercek release icin runner'in erisebildigi bir `install.wim` kaynagi gerekir

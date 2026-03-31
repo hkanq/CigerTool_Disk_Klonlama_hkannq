@@ -33,6 +33,23 @@ powershell -ExecutionPolicy Bypass -File .\build\build_cigertool_release.ps1 -Pl
 
 Gerçek artifact üretimi için yönetici yetkisi gerekir. Bunun nedeni `diskpart`, `DISM` ve `bcdboot` ile VHDX hazırlama adımlarının yükseltilmiş hak istemesidir.
 
+## GitHub Actions
+
+- `push` ile çalışan workflow, gerçek WIM yoksa otomatik olarak `PlanOnly` doğrulama yapar
+- gerçek release ISO almak için `workflow_dispatch` kullanılır
+- runner'da `inputs/workspace/install.wim` yoksa workflow şu kaynakları sırayla dener:
+  - repo içindeki `inputs/workspace/install.wim`
+  - `workflow_dispatch` girdisi: `workspace_wim_url`
+  - repository secret: `WORKSPACE_WIM_URL`
+
+Kimlik doğrulama gerekiyorsa opsiyonel secret:
+
+- `WORKSPACE_WIM_AUTH_HEADER`
+
+Biçim:
+
+- `Header-Name: Header-Value`
+
 ## Ana Çıktı
 
 Birincil artifact:
