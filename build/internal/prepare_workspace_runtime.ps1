@@ -140,6 +140,116 @@ function Get-DriveRoot {
     return ($DriveLetter.Trim().Substring(0, 1).ToUpperInvariant() + ":\")
 }
 
+function Get-VhdPartition {
+    param(
+        [Parameter(Mandatory = $true)][string]$VhdPath,
+        [int]$PartitionNumber = 1,
+        [int]$RetryCount = 12,
+        [int]$RetryDelayMilliseconds = 500
+    )
+
+    for ($attempt = 0; $attempt -lt $RetryCount; $attempt++) {
+        try {
+            $diskImage = Get-DiskImage -ImagePath $VhdPath -ErrorAction Stop
+            if ($diskImage.Attached) {
+                $disk = $diskImage | Get-Disk -ErrorAction Stop
+                $partition = Get-Partition -DiskNumber $disk.Number -PartitionNumber $PartitionNumber -ErrorAction Stop
+                if ($null -ne $partition) {
+                    return $partition
+                }
+            }
+        }
+        catch {
+            if ($attempt -eq ($RetryCount - 1)) {
+                return $null
+            }
+        }
+
+        Start-Sleep -Milliseconds $RetryDelayMilliseconds
+    }
+
+    return $null
+}
+
+function Get-VhdDriveLetter {
+    param(
+        [Parameter(Mandatory = $true)][string]$VhdPath,
+        [int]$PartitionNumber = 1,
+        [int]$RetryCount = 1,
+        [int]$RetryDelayMilliseconds = 0
+    )
+
+    $partition = Get-VhdPartition -VhdPath $VhdPath -PartitionNumber $PartitionNumber -RetryCount $RetryCount -RetryDelayMilliseconds $RetryDelayMilliseconds
+    if ($null -eq $partition) {
+        return $null
+    }
+
+    $driveLetter = [string]$partition.DriveLetter
+    if ([string]::IsNullOrWhiteSpace($driveLetter)) {
+        return $null
+    }
+
+    return $driveLetter.Trim().Substring(0, 1).ToUpperInvariant()
+}
+
+function Set-VhdDriveLetter {
+    param(
+        [Parameter(Mandatory = $true)][string]$VhdPath,
+        [Parameter(Mandatory = $true)][string]$DriveLetter,
+        [Parameter(Mandatory = $true)][string]$Label,
+        [int]$PartitionNumber = 1
+    )
+
+    $normalizedLetter = $DriveLetter.Trim().Substring(0, 1).ToUpperInvariant()
+    $partition = Get-VhdPartition -VhdPath $VhdPath -PartitionNumber $PartitionNumber
+    if ($null -eq $partition) {
+        throw "$Label partition bilgisi hazir degil: $VhdPath"
+    }
+
+    $currentLetter = Get-VhdDriveLetter -VhdPath $VhdPath -PartitionNumber $PartitionNumber
+    if ($currentLetter -eq $normalizedLetter) {
+        return $normalizedLetter
+    }
+
+    try {
+        Set-Partition -DiskNumber $partition.DiskNumber -PartitionNumber $partition.PartitionNumber -NewDriveLetter $normalizedLetter -ErrorAction Stop | Out-Null
+    }
+    catch {
+        Add-PartitionAccessPath -DiskNumber $partition.DiskNumber -PartitionNumber $partition.PartitionNumber -AccessPath (Get-DriveRoot -DriveLetter $normalizedLetter) -ErrorAction Stop | Out-Null
+    }
+
+    $updatedLetter = Get-VhdDriveLetter -VhdPath $VhdPath -PartitionNumber $PartitionNumber -RetryCount 6 -RetryDelayMilliseconds 250
+    if ($updatedLetter -eq $normalizedLetter -or (Test-Path -LiteralPath (Get-DriveRoot -DriveLetter $normalizedLetter))) {
+        return $normalizedLetter
+    }
+
+    throw "$Label surucu harfi atanamadi: $normalizedLetter"
+}
+
+function Dismount-VhdIfAttached {
+    param(
+        [Parameter(Mandatory = $true)][string]$VhdPath,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+
+    if (-not (Test-Path -LiteralPath $VhdPath)) {
+        return
+    }
+
+    try {
+        $diskImage = Get-DiskImage -ImagePath $VhdPath -ErrorAction Stop
+        if ($diskImage.Attached) {
+            Dismount-DiskImage -ImagePath $VhdPath -ErrorAction Stop
+            Write-BuildLog "$Label bagli disk imaji temizlendi: $VhdPath" "WARN"
+        }
+    }
+    catch [Microsoft.Management.Infrastructure.CimException] {
+    }
+    catch {
+        Write-BuildLog "$Label disk imaji temizlenemedi: $VhdPath | $($_.Exception.Message)" "WARN"
+    }
+}
+
 function Mount-VhdAndAssignDriveLetter {
     param(
         [Parameter(Mandatory = $true)][string]$VhdPath,
@@ -149,8 +259,27 @@ function Mount-VhdAndAssignDriveLetter {
         [string[]]$ExcludedLetters = @()
     )
 
+    Invoke-DiskPartScript -Lines @(
+        "select vdisk file=""$VhdPath""",
+        "attach vdisk noerr"
+    )
+
+    $excluded = @{}
+    foreach ($item in $ExcludedLetters) {
+        if (-not [string]::IsNullOrWhiteSpace($item)) {
+            $excluded[$item.Trim().Substring(0, 1).ToUpperInvariant()] = $true
+        }
+    }
+
+    $existingLetter = Get-VhdDriveLetter -VhdPath $VhdPath -PartitionNumber $PartitionNumber -RetryCount 6 -RetryDelayMilliseconds 250
+    if ((-not [string]::IsNullOrWhiteSpace($existingLetter)) -and (-not $excluded.ContainsKey($existingLetter))) {
+        Write-BuildLog "$Label icin mevcut surucu harfi yeniden kullaniliyor: $existingLetter"
+        return $existingLetter
+    }
+
+    $fallbackLetters = @("Z", "Y", "X", "W", "V", "U", "T", "S", "R", "Q", "P", "O", "N", "M")
     $triedLetters = New-Object System.Collections.Generic.HashSet[string]([System.StringComparer]::OrdinalIgnoreCase)
-    foreach ($candidate in @($PreferredLetters + (Get-FreeDriveLetter -PreferredLetters @("Z", "Y", "X", "W", "V", "U", "T", "S", "R", "Q", "P", "O", "N", "M") -ExcludedLetters $ExcludedLetters))) {
+    foreach ($candidate in @($PreferredLetters + $fallbackLetters)) {
         if ([string]::IsNullOrWhiteSpace($candidate)) {
             continue
         }
@@ -160,18 +289,17 @@ function Mount-VhdAndAssignDriveLetter {
             continue
         }
 
+        if ($excluded.ContainsKey($letter)) {
+            continue
+        }
+
         if (Test-Path -LiteralPath ($letter + ":\\")) {
             Write-BuildLog "$Label icin surucu harfi atlandi, kullanimda gorunuyor: $letter" "WARN"
             continue
         }
 
         try {
-            Invoke-DiskPartScript -Lines @(
-                "select vdisk file=""$VhdPath""",
-                "attach vdisk noerr",
-                "select partition $PartitionNumber",
-                "assign letter=$letter noerr"
-            )
+            Set-VhdDriveLetter -VhdPath $VhdPath -DriveLetter $letter -Label $Label -PartitionNumber $PartitionNumber | Out-Null
         }
         catch {
             Write-BuildLog "$Label icin surucu harfi atanamadi: $letter | $($_.Exception.Message)" "WARN"
@@ -223,10 +351,10 @@ function Ensure-VhdMounted {
     Write-BuildLog "$Label surucusu bagli degil, yeniden baglanmaya calisiliyor: $VhdPath" "WARN"
     Invoke-DiskPartScript -Lines @(
         "select vdisk file=""$VhdPath""",
-        "attach vdisk",
-        "select partition $PartitionNumber",
-        "assign letter=$DriveLetter noerr"
+        "attach vdisk noerr"
     )
+
+    Set-VhdDriveLetter -VhdPath $VhdPath -DriveLetter $DriveLetter -Label $Label -PartitionNumber $PartitionNumber | Out-Null
 
     if (-not (Test-Path -LiteralPath ($DriveLetter + ":\\"))) {
         throw "$Label surucusu yeniden baglanamadi: $DriveLetter"
@@ -537,6 +665,9 @@ try {
     $installImage = $workspaceWimSource
     Write-BuildLog "Workspace WIM kaynagi bulundu: $installImage"
 
+    Dismount-VhdIfAttached -VhdPath $workspaceVhdPath -Label "Workspace VHD"
+    Dismount-VhdIfAttached -VhdPath $efiVhdPath -Label "EFI VHD"
+
     Invoke-DiskPartScript -Lines @(
         "create vdisk file=""$workspaceVhdPath"" maximum=$($WorkspaceSizeGB * 1024) type=expandable",
         "select vdisk file=""$workspaceVhdPath""",
@@ -613,15 +744,7 @@ try {
 finally {
     foreach ($diskPath in @($workspaceVhdPath, (Join-Path $workspaceRoot "CigerTool-EfiSystem.vhdx"))) {
         if (Test-Path -LiteralPath $diskPath) {
-            try {
-                Invoke-DiskPartScript -Lines @(
-                    "select vdisk file=""$diskPath""",
-                    "detach vdisk"
-                )
-            }
-            catch {
-                Write-BuildLog "VHD detach uyarisi: $diskPath | $($_.Exception.Message)" "WARN"
-            }
+            Dismount-VhdIfAttached -VhdPath $diskPath -Label "VHD"
         }
     }
 }
