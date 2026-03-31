@@ -213,6 +213,23 @@ function Resolve-VhdPartition {
     return @()
 }
 
+function Resolve-VhdDiskPartPartitionNumber {
+    param(
+        [int]$PartitionNumber = 0,
+        [string]$PartitionRole = "BasicData"
+    )
+
+    if ($PartitionNumber -gt 0) {
+        return $PartitionNumber
+    }
+
+    if ($PartitionRole -eq "EfiSystem") {
+        return 1
+    }
+
+    return 2
+}
+
 function Get-VhdPartition {
     param(
         [Parameter(Mandatory = $true)][string]$VhdPath,
@@ -336,6 +353,40 @@ function Set-VhdDriveLetter {
     throw "$Label surucu harfi atanamadi: $normalizedLetter"
 }
 
+function Assign-VhdDriveLetterWithDiskPart {
+    param(
+        [Parameter(Mandatory = $true)][string]$VhdPath,
+        [Parameter(Mandatory = $true)][string]$DriveLetter,
+        [Parameter(Mandatory = $true)][string]$Label,
+        [int]$PartitionNumber = 0,
+        [string]$PartitionRole = "BasicData"
+    )
+
+    $normalizedLetter = Normalize-DriveLetter -DriveLetter $DriveLetter
+    if ($null -eq $normalizedLetter) {
+        throw "$Label icin gecersiz surucu harfi verildi: $DriveLetter"
+    }
+
+    $diskPartPartitionNumber = Resolve-VhdDiskPartPartitionNumber -PartitionNumber $PartitionNumber -PartitionRole $PartitionRole
+    Invoke-DiskPartScript -Lines @(
+        "select vdisk file=""$VhdPath""",
+        "attach vdisk noerr",
+        "select partition $diskPartPartitionNumber",
+        "assign letter=$normalizedLetter"
+    )
+
+    $driveRoot = Get-DriveRoot -DriveLetter $normalizedLetter
+    for ($attempt = 0; $attempt -lt 8; $attempt++) {
+        if (Test-Path -LiteralPath $driveRoot) {
+            return $normalizedLetter
+        }
+
+        Start-Sleep -Milliseconds 250
+    }
+
+    throw "$Label surucu harfi atanamadi: $normalizedLetter"
+}
+
 function Dismount-VhdIfAttached {
     param(
         [Parameter(Mandatory = $true)][string]$VhdPath,
@@ -370,22 +421,11 @@ function Mount-VhdAndAssignDriveLetter {
         [string[]]$ExcludedLetters = @()
     )
 
-    Invoke-DiskPartScript -Lines @(
-        "select vdisk file=""$VhdPath""",
-        "attach vdisk noerr"
-    )
-
     $excluded = @{}
     foreach ($item in $ExcludedLetters) {
         if (-not [string]::IsNullOrWhiteSpace($item)) {
             $excluded[$item.Trim().Substring(0, 1).ToUpperInvariant()] = $true
         }
-    }
-
-    $existingLetter = Get-VhdDriveLetter -VhdPath $VhdPath -PartitionNumber $PartitionNumber -PartitionRole $PartitionRole -RetryCount 6 -RetryDelayMilliseconds 250
-    if ((-not [string]::IsNullOrWhiteSpace($existingLetter)) -and (-not $excluded.ContainsKey($existingLetter))) {
-        Write-BuildLog "$Label icin mevcut surucu harfi yeniden kullaniliyor: $existingLetter"
-        return $existingLetter
     }
 
     $fallbackLetters = @("Z", "Y", "X", "W", "V", "U", "T", "S", "R", "Q", "P", "O", "N", "M")
@@ -410,7 +450,7 @@ function Mount-VhdAndAssignDriveLetter {
         }
 
         try {
-            Set-VhdDriveLetter -VhdPath $VhdPath -DriveLetter $letter -Label $Label -PartitionNumber $PartitionNumber -PartitionRole $PartitionRole | Out-Null
+            Assign-VhdDriveLetterWithDiskPart -VhdPath $VhdPath -DriveLetter $letter -Label $Label -PartitionNumber $PartitionNumber -PartitionRole $PartitionRole | Out-Null
         }
         catch {
             Write-BuildLog "$Label icin surucu harfi atanamadi: $letter | $($_.Exception.Message)" "WARN"
@@ -461,12 +501,7 @@ function Ensure-VhdMounted {
     }
 
     Write-BuildLog "$Label surucusu bagli degil, yeniden baglanmaya calisiliyor: $VhdPath" "WARN"
-    Invoke-DiskPartScript -Lines @(
-        "select vdisk file=""$VhdPath""",
-        "attach vdisk noerr"
-    )
-
-    Set-VhdDriveLetter -VhdPath $VhdPath -DriveLetter $DriveLetter -Label $Label -PartitionNumber $PartitionNumber -PartitionRole $PartitionRole | Out-Null
+    Assign-VhdDriveLetterWithDiskPart -VhdPath $VhdPath -DriveLetter $DriveLetter -Label $Label -PartitionNumber $PartitionNumber -PartitionRole $PartitionRole | Out-Null
 
     if (-not (Test-Path -LiteralPath ($DriveLetter + ":\\"))) {
         throw "$Label surucusu yeniden baglanamadi: $DriveLetter"

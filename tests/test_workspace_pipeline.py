@@ -41,10 +41,13 @@ class WorkspacePipelineTests(unittest.TestCase):
         self.assertIn("Windows\\Panther\\Unattend.xml", script)
         self.assertIn("Ensure-VhdMounted", script)
         self.assertIn("Mount-VhdAndAssignDriveLetter", script)
+        self.assertIn("Assign-VhdDriveLetterWithDiskPart", script)
+        self.assertIn("Resolve-VhdDiskPartPartitionNumber", script)
         self.assertIn("Normalize-DriveLetter", script)
         self.assertIn("Assert-SufficientFreeSpace", script)
         self.assertIn("Get-DiskImage", script)
-        self.assertIn("Set-Partition", script)
+        self.assertIn("select partition", script)
+        self.assertIn("assign letter=", script)
         self.assertIn("Dismount-DiskImage", script)
         self.assertIn("AutoAdminLogon", script)
         self.assertIn("ForceAutoLogon", script)
@@ -58,7 +61,6 @@ class WorkspacePipelineTests(unittest.TestCase):
         self.assertIn('"Tools"', script)
         self.assertIn("workspace_stage_root", script)
         self.assertNotIn("Mount-DiskImage", script)
-        self.assertNotIn("assign letter=", script)
         self.assertNotIn("Resolve-WindowsInstallImage", script)
 
     def test_workspace_startup_exports_runtime_contract(self) -> None:
