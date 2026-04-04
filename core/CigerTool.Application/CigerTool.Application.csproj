@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>CigerTool.Application</AssemblyName>
+    <RootNamespace>CigerTool.Application</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CigerTool.Domain\CigerTool.Domain.csproj" />
+  </ItemGroup>
+</Project>

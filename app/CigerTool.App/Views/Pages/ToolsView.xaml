@@ -1,0 +1,124 @@
+<UserControl x:Class="CigerTool.App.Views.Pages.ToolsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <StackPanel Margin="18">
+      <Border Style="{StaticResource CardBorderStyle}">
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+
+          <StackPanel>
+            <TextBlock FontSize="28"
+                       FontWeight="SemiBold"
+                       Foreground="{StaticResource ContentHeadingBrush}"
+                       Text="{Binding Snapshot.Heading}" />
+            <TextBlock Margin="0,10,0,0"
+                       TextWrapping="Wrap"
+                       Foreground="{StaticResource ContentTextBrush}"
+                       Text="{Binding Snapshot.Summary}" />
+          </StackPanel>
+
+          <Button Grid.Column="1"
+                  Width="120"
+                  Height="42"
+                  VerticalAlignment="Top"
+                  Command="{Binding RefreshCommand}"
+                  Content="Yenile"
+                  Style="{StaticResource PrimaryActionButtonStyle}" />
+        </Grid>
+      </Border>
+
+      <ItemsControl ItemsSource="{Binding Snapshot.Metrics}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <WrapPanel />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <Border Width="270" Style="{StaticResource CardBorderStyle}">
+              <StackPanel>
+                <TextBlock Foreground="{StaticResource ContentMutedTextBrush}" Text="{Binding Label}" />
+                <TextBlock Margin="0,8,0,0"
+                           FontSize="22"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource ContentHeadingBrush}"
+                           Text="{Binding Value}" />
+                <TextBlock Margin="0,10,0,0"
+                           TextWrapping="Wrap"
+                           Foreground="{StaticResource ContentTextBrush}"
+                           Text="{Binding SupportingText}" />
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <ItemsControl ItemsSource="{Binding Snapshot.Tools}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <Border Style="{StaticResource CardBorderStyle}">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel>
+                  <TextBlock FontSize="18"
+                             FontWeight="SemiBold"
+                             Foreground="{StaticResource ContentHeadingBrush}"
+                             Text="{Binding Name}" />
+                  <TextBlock Margin="0,6,0,0"
+                             Foreground="{StaticResource ContentMutedTextBrush}"
+                             Text="{Binding Category}" />
+                  <TextBlock Margin="0,6,0,0"
+                             Foreground="{StaticResource ContentMutedTextBrush}"
+                             Text="{Binding AvailabilityStatus}" />
+                  <TextBlock Margin="0,10,0,0"
+                             TextWrapping="Wrap"
+                             Foreground="{StaticResource ContentTextBrush}"
+                             Text="{Binding Description}" />
+                  <TextBlock Margin="0,10,0,0"
+                             TextWrapping="Wrap"
+                             Foreground="{StaticResource ContentMutedTextBrush}"
+                             Text="{Binding ResolvedExecutablePath}" />
+                </StackPanel>
+
+                <Button Grid.Column="1"
+                        Width="150"
+                        Height="42"
+                        Margin="18,0,0,0"
+                        VerticalAlignment="Center"
+                        IsEnabled="{Binding CanLaunch}"
+                        Command="{Binding DataContext.LaunchToolCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                        CommandParameter="{Binding}"
+                        Content="Baslatmayi Dene"
+                        Style="{StaticResource PrimaryActionButtonStyle}" />
+              </Grid>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <Border Style="{StaticResource CardBorderStyle}" Background="#F7FAFB">
+        <StackPanel>
+          <TextBlock FontSize="16"
+                     FontWeight="SemiBold"
+                     Foreground="{StaticResource ContentHeadingBrush}"
+                     Text="Calistirma Politikasi" />
+          <TextBlock Margin="0,10,0,0"
+                     TextWrapping="Wrap"
+                     Foreground="{StaticResource ContentTextBrush}"
+                     Text="{Binding Snapshot.LaunchPolicyNote}" />
+          <TextBlock Margin="0,14,0,0"
+                     Foreground="{StaticResource ContentMutedTextBrush}"
+                     Text="{Binding LaunchStatus}" />
+        </StackPanel>
+      </Border>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

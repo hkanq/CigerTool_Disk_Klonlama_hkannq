@@ -1,126 +1,85 @@
-# CigerTool by hkannq
+# CigerTool
 
-CigerTool, tek bir USB ile iki işi birden yapan hazır çalışma alanı ürünüdür:
+CigerTool, Windows için geliştirilen yerel bir disk işlemleri ürün ailesidir.
 
-- `CigerTool Workspace`
-  Hazır Windows workspace'ini doğrudan masaüstüne açar ve `CigerTool` uygulamasını otomatik başlatır.
-- `ISO Library`
-  USB'ye sonradan bırakılan ISO dosyalarını açılış menüsünde gösterir.
+Ürün ailesi iki teslimattan oluşur:
 
-Bu repo artık WinPE-first veya Windows Setup-first mantığı kullanmaz. Ana ürün davranışı, hazırlanmış workspace imajı üzerinden kurulur.
+- `CigerTool App`: Normal Windows 10/11 üzerinde çalışan masaüstü uygulaması
+- `CigerTool OS`: Kullanıcının dışarıda hazırladığı Windows 10 PE tabanı içinde çalışan servis ortamı
 
-## Girdi
+## Sınır
 
-Zorunlu yerel kaynak dosya:
+Bu depo:
 
-- `inputs/workspace/install.wim`
+- WinPE üretmez
+- Windows ADK kurmaz
+- `boot.wim` oluşturmaz
+- işletim sistemi imajı üretmez
 
-Bu dosya:
+Bu depo şunlardan sorumludur:
 
-- build için yerel girdidir
-- git'e commit edilmez
-- `.gitignore` tarafından korunur
+- CigerTool uygulaması
+- USB ortamı oluşturma akışı
+- yayın kaynağı ve manifest sistemi
+- WinPE içine yerleştirme ve başlatma sözleşmesi
 
-## Build
+## Ana Modüller
 
-Tek resmi build girişi:
+- `Ana Sayfa`
+- `Klonlama`
+- `Yedekleme ve İmaj`
+- `Diskler ve Sağlık`
+- `USB Ortamı Oluştur`
+- `Günlükler`
+- `Ayarlar`
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\build\build_cigertool_release.ps1
-```
+## Bugün Gerçekten Çalışan Çekirdek İşlemler
 
-Sadece plan ve staging doğrulaması için:
+- ham kopya ile sürücüden sürücüye gerçek bayt kopyalama
+- akıllı kopya ile dosya temelli sürücü eşleme
+- sürücüden ham `.img` imaj alma
+- sürücüden ham `.ctimg` imaj alma
+- sistem dışı sürücülerden akıllı `.ctimg` imaj alma
+- `.img`, ham `.ctimg` ve akıllı `.ctimg` için desteklenen geri yükleme akışları
+- `.img` ile ham `.ctimg` arasında dönüştürme
+- USB için imaj indirme, doğrulama ve yazma
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\build\build_cigertool_release.ps1 -PlanOnly
-```
+## Bilinçli Kapsam Sınırı
 
-Gerçek artifact üretimi için yönetici yetkisi gerekir. Bunun nedeni `diskpart`, `DISM` ve `bcdboot` ile VHDX hazırlama adımlarının yükseltilmiş hak istemesidir.
+Bu sürümde henüz tam kapsamlı olmayan alanlar:
 
-## GitHub Actions
+- tam fiziksel disk bölüm tablosu yeniden kurma
+- önyükleme onarımı
+- BitLocker iş akışları
+- gelişmiş SMART ve üretici telemetrisi
+- `Taşıma ve geçiş` bölümünde bağımsız yürütme motoru
 
-- `push` akışı sadece validation çalıştırır
-- `push` üzerinde gerçek ISO build yapılmaz
-- `workflow_dispatch` + `build_mode=release` gerçek ISO build yoludur
-- release modu self-hosted Windows runner üzerinde çalışır
-- release işi kalıcı yerel repo kopyasını kullanır:
-  - `C:\actions-runner\cigertool-release\repo`
+## Yayın Çıktıları
 
-Manual Actions release öncesi:
+- standart masaüstü yapı: [CigerTool.exe](C:/Users/Radius%20Admin/Desktop/codex/CigerTool/artifacts/app/CigerTool.exe)
+- WinPE odaklı yapı: [CigerTool.WinPE.exe](C:/Users/Radius%20Admin/Desktop/codex/CigerTool/artifacts/winpe/CigerTool.WinPE.exe)
 
-1. Self-hosted runner makinesinde şu klasöre `install.wim` koy:
-   - `C:\actions-runner\cigertool-release\repo\inputs\workspace\install.wim`
-2. Aynı makinede Python 3.12+ kurulu ve `python` komutu PATH içinde olsun
-3. Self-hosted runner servisi yerel administrator haklarıyla çalışsın
-   - `NT AUTHORITY\NETWORK SERVICE` hesabı yeterli değildir
-   - gerekirse runner servisini administrator hesabıyla yeniden kur ya da `run.cmd` dosyasını yükseltilmiş terminalde başlat
-4. GitHub Actions üzerinden `Build CigerTool Release` workflow'unu `build_mode=release` ile çalıştır
+Her iki çıktı da açılış için zorunlu yan dosya gerektirmez. Varsayılan ayarlar uygulamanın içinde taşınır.
 
-## Ana Çıktı
+Yazılabilir uygulama verileri işletim sistemi konumlarına gider:
 
-Birincil artifact:
+- masaüstü yapı: `%LocalAppData%\CigerTool`
+- WinPE odaklı yapı: `%TEMP%\CigerTool`
 
-- `artifacts/CigerTool-Workspace.iso`
+## Doğrulama
 
-GitHub Actions artifact adı:
+Bu turda doğrulananlar:
 
-- `CigerTool-Workspace`
+- `dotnet build CigerTool.sln -c Release`
+- `dotnet test CigerTool.sln -c Release --no-build`
+- `powershell -ExecutionPolicy Bypass -File build/scripts/Publish-CigerTool.ps1`
+- iki yayın çıktısı için kısa açılış denemesi
 
-İkincil artifact'ler:
+## Ana Dokümanlar
 
-- `artifacts/CigerTool-Workspace.iso.sha256`
-- `artifacts/CigerTool-Workspace-debug.zip`
-- `artifacts/CigerTool-Workspace.release.json`
-
-## ISO Library
-
-Repo içindeki kaynak klasör:
-
-- `iso-library/windows`
-- `iso-library/linux`
-- `iso-library/tools`
-
-Build sırasında bu içerik USB düzeninde şu köklere taşınır:
-
-- `/isos/windows`
-- `/isos/linux`
-- `/isos/tools`
-
-Son kullanıcı USB'yi yazdıktan sonra yeni ISO'ları doğrudan bu `/isos/*` dizinlerine bırakabilir. Açılış menüsü her boot sırasında bu dizinleri yeniden tarar.
-
-## Klasör Özeti
-
-- `build/`
-  Final release build girişi ve iç yardımcı scriptler
-- `boot/`
-  GRUB tabanlı açılış katmanı ve boot asset'leri
-- `workspace/`
-  Hazır Windows workspace startup, unattend ve payload katmanı
-- `cigertool/`
-  Ana uygulama kodu ve runtime operasyon scriptleri
-- `iso-library/`
-  Build kaynak ISO kütüphanesi
-- `tools/`
-  USB'ye taşınacak portable araçlar
-- `docs/`
-  Mimari, boot, release ve durum belgeleri
-- `inputs/`
-  Build girdileri
-
-## Ürün Davranışı
-
-Açılış menüsünde varsayılan giriş:
-
-- `CigerTool Workspace`
-
-İkinci ana giriş:
-
-- `ISO Library`
-
-`CigerTool Workspace` hedef davranışı:
-
-- Windows Setup yok
-- OOBE yok
-- parola yok
-- doğrudan masaüstü
-- `CigerTool` auto-start
+- [docs/EXECUTION_ENGINE_STATUS.md](C:/Users/Radius%20Admin/Desktop/codex/CigerTool/docs/EXECUTION_ENGINE_STATUS.md)
+- [docs/CLONE_MODEL.md](C:/Users/Radius%20Admin/Desktop/codex/CigerTool/docs/CLONE_MODEL.md)
+- [docs/IMAGE_WORKFLOW.md](C:/Users/Radius%20Admin/Desktop/codex/CigerTool/docs/IMAGE_WORKFLOW.md)
+- [docs/DISK_HEALTH_MODEL.md](C:/Users/Radius%20Admin/Desktop/codex/CigerTool/docs/DISK_HEALTH_MODEL.md)
+- [docs/FEATURE_SCOPE.md](C:/Users/Radius%20Admin/Desktop/codex/CigerTool/docs/FEATURE_SCOPE.md)
+- [docs/STATUS.md](C:/Users/Radius%20Admin/Desktop/codex/CigerTool/docs/STATUS.md)

@@ -1,0 +1,116 @@
+<UserControl x:Class="CigerTool.App.Views.Pages.SettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <StackPanel Margin="18">
+      <Border Style="{StaticResource CardBorderStyle}">
+        <StackPanel>
+          <TextBlock FontSize="28"
+                     FontWeight="SemiBold"
+                     Foreground="{StaticResource ContentHeadingBrush}"
+                     Text="{Binding Snapshot.Heading}" />
+          <TextBlock Margin="0,10,0,0"
+                     TextWrapping="Wrap"
+                     Foreground="{StaticResource ContentTextBrush}"
+                     Text="{Binding Snapshot.Summary}" />
+        </StackPanel>
+      </Border>
+
+      <Border Style="{StaticResource CardBorderStyle}">
+        <StackPanel>
+          <TextBlock FontSize="18"
+                     FontWeight="SemiBold"
+                     Foreground="{StaticResource ContentHeadingBrush}"
+                     Text="Genel ayarlar" />
+
+          <Grid Margin="0,16,0,0">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="220" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Foreground="{StaticResource ContentMutedTextBrush}" Text="Dil" />
+            <TextBlock Grid.Column="1" Foreground="{StaticResource ContentHeadingBrush}" Text="{Binding Snapshot.Language}" />
+
+            <TextBlock Grid.Row="1" Foreground="{StaticResource ContentMutedTextBrush}" Text="Yayın kanalı" />
+            <TextBlock Grid.Row="1" Grid.Column="1" Foreground="{StaticResource ContentHeadingBrush}" Text="{Binding Snapshot.UpdateChannel}" />
+
+            <TextBlock Grid.Row="2" Foreground="{StaticResource ContentMutedTextBrush}" Text="Türkçe varsayılanlar" />
+            <TextBlock Grid.Row="2"
+                       Grid.Column="1"
+                       Foreground="{StaticResource ContentHeadingBrush}"
+                       Text="{Binding Snapshot.UseTurkishDefaults, Converter={StaticResource BooleanToFriendlyTextConverter}, ConverterParameter='Açık|Kapalı'}" />
+
+            <TextBlock Grid.Row="3" Foreground="{StaticResource ContentMutedTextBrush}" Text="Tek dosya paket hedefi" />
+            <TextBlock Grid.Row="3"
+                       Grid.Column="1"
+                       Foreground="{StaticResource ContentHeadingBrush}"
+                       Text="{Binding Snapshot.PreferSingleFilePublishing, Converter={StaticResource BooleanToFriendlyTextConverter}, ConverterParameter='Açık|Kapalı'}" />
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <Border Style="{StaticResource CardBorderStyle}" Background="#F7FAFB">
+        <StackPanel>
+          <TextBlock FontSize="18"
+                     FontWeight="SemiBold"
+                     Foreground="{StaticResource ContentHeadingBrush}"
+                     Text="Ürün notu" />
+          <TextBlock Margin="0,12,0,0"
+                     TextWrapping="Wrap"
+                     Foreground="{StaticResource ContentTextBrush}"
+                     Text="CigerTool'un ana disk işlemleri uygulamanın içinde yerel olarak çalışır. Yardımcı araçlar varsa yalnızca isteğe bağlı destek olarak değerlendirilir." />
+        </StackPanel>
+      </Border>
+
+      <Expander Margin="0,8,0,14"
+                Background="#F7FAFB"
+                BorderBrush="{StaticResource CardBorderBrush}"
+                BorderThickness="1"
+                Padding="16"
+                Header="Destek ve teknik bilgiler"
+                IsExpanded="False">
+        <StackPanel Margin="0,12,0,0">
+          <TextBlock Foreground="{StaticResource ContentMutedTextBrush}" Text="Yayın bilgisi adresi" />
+          <TextBlock Margin="0,4,0,0"
+                     TextWrapping="Wrap"
+                     Foreground="{StaticResource ContentHeadingBrush}"
+                     Text="{Binding Snapshot.ManifestUrl, TargetNullValue=Tanımlı değil}" />
+
+          <TextBlock Margin="0,12,0,0" Foreground="{StaticResource ContentMutedTextBrush}" Text="Veri depolama düzeni" />
+          <TextBlock Margin="0,4,0,0" Foreground="{StaticResource ContentHeadingBrush}" Text="{Binding Snapshot.StorageMode}" />
+
+          <TextBlock Margin="0,12,0,0" Foreground="{StaticResource ContentMutedTextBrush}" Text="Veri konumu" />
+          <TextBlock Margin="0,4,0,0"
+                     TextWrapping="Wrap"
+                     Foreground="{StaticResource ContentHeadingBrush}"
+                     Text="{Binding Snapshot.DataRoot}" />
+
+          <TextBlock Margin="0,12,0,0" Foreground="{StaticResource ContentMutedTextBrush}" Text="Günlük konumu" />
+          <TextBlock Margin="0,4,0,0"
+                     TextWrapping="Wrap"
+                     Foreground="{StaticResource ContentHeadingBrush}"
+                     Text="{Binding Snapshot.LogRoot}" />
+
+          <TextBlock Margin="0,12,0,0" Foreground="{StaticResource ContentMutedTextBrush}" Text="İndirme konumu" />
+          <TextBlock Margin="0,4,0,0"
+                     TextWrapping="Wrap"
+                     Foreground="{StaticResource ContentHeadingBrush}"
+                     Text="{Binding Snapshot.DownloadsRoot}" />
+
+          <TextBlock Margin="0,12,0,0" Foreground="{StaticResource ContentMutedTextBrush}" Text="İsteğe bağlı araç konumu" />
+          <TextBlock Margin="0,4,0,0"
+                     TextWrapping="Wrap"
+                     Foreground="{StaticResource ContentHeadingBrush}"
+                     Text="{Binding Snapshot.ToolsRoot}" />
+        </StackPanel>
+      </Expander>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

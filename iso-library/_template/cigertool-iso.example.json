@@ -1,9 +1,0 @@
-{
-  "category": "tools",
-  "profile": "tools",
-  "boot_strategy": "efi-chainload",
-  "efi_boot_path": "/EFI/BOOT/BOOTX64.EFI",
-  "support_status": "untested",
-  "failure_reason": "missing boot files",
-  "note": "Bu ornek dosya, otomatik profillemeyi override etmek icin kullanilir."
-}

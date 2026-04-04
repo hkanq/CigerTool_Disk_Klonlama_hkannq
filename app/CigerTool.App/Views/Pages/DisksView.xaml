@@ -1,0 +1,203 @@
+<UserControl x:Class="CigerTool.App.Views.Pages.DisksView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <StackPanel Margin="18">
+      <Border Style="{StaticResource CardBorderStyle}">
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+
+          <StackPanel>
+            <TextBlock FontSize="28"
+                       FontWeight="SemiBold"
+                       Foreground="{StaticResource ContentHeadingBrush}"
+                       Text="{Binding Snapshot.Heading}" />
+            <TextBlock Margin="0,10,0,0"
+                       TextWrapping="Wrap"
+                       Foreground="{StaticResource ContentTextBrush}"
+                       Text="{Binding Snapshot.Summary}" />
+            <TextBlock Margin="0,12,0,0"
+                       Foreground="{StaticResource ContentMutedTextBrush}"
+                       Text="{Binding StatusMessage}" />
+          </StackPanel>
+
+          <Button Grid.Column="1"
+                  Width="120"
+                  Height="42"
+                  VerticalAlignment="Top"
+                  Command="{Binding RefreshCommand}"
+                  Content="Yenile"
+                  Style="{StaticResource SecondaryActionButtonStyle}" />
+        </Grid>
+      </Border>
+
+      <ItemsControl ItemsSource="{Binding Snapshot.Metrics}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <WrapPanel />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <Border Width="270" Style="{StaticResource CardBorderStyle}">
+              <StackPanel>
+                <TextBlock Foreground="{StaticResource ContentMutedTextBrush}" Text="{Binding Label}" />
+                <TextBlock Margin="0,8,0,0"
+                           FontSize="22"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource ContentHeadingBrush}"
+                           Text="{Binding Value}" />
+                <TextBlock Margin="0,10,0,0"
+                           TextWrapping="Wrap"
+                           Foreground="{StaticResource ContentTextBrush}"
+                           Text="{Binding SupportingText}" />
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <TextBlock Margin="0,10,0,16"
+                 FontSize="18"
+                 FontWeight="SemiBold"
+                 Foreground="{StaticResource ContentHeadingBrush}"
+                 Text="Bağlı sürücüler" />
+
+      <ItemsControl ItemsSource="{Binding Snapshot.Disks}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <Border Style="{StaticResource CardBorderStyle}">
+              <StackPanel>
+                <TextBlock FontSize="17"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource ContentHeadingBrush}"
+                           Text="{Binding Name}" />
+                <TextBlock Margin="0,6,0,0"
+                           Foreground="{StaticResource ContentMutedTextBrush}"
+                           Text="{Binding IdentityLabel}" />
+
+                <WrapPanel Margin="0,10,0,0">
+                  <Border Margin="0,0,10,8"
+                          Padding="10,6"
+                          CornerRadius="12"
+                          Background="#EEF3F6">
+                    <TextBlock Foreground="{StaticResource ContentHeadingBrush}" Text="{Binding FileSystem}" />
+                  </Border>
+                  <Border Margin="0,0,10,8"
+                          Padding="10,6"
+                          CornerRadius="12"
+                          Background="#EEF3F6">
+                    <TextBlock Foreground="{StaticResource ContentHeadingBrush}" Text="{Binding ConnectionType}" />
+                  </Border>
+                  <Border Margin="0,0,10,8"
+                          Padding="10,6"
+                          CornerRadius="12"
+                          Background="#EEF3F6">
+                    <TextBlock Foreground="{StaticResource ContentHeadingBrush}" Text="{Binding MediaType}" />
+                  </Border>
+                  <Border Margin="0,0,10,8"
+                          Padding="10,6"
+                          CornerRadius="12"
+                          Background="{StaticResource AccentSoftBrush}">
+                    <TextBlock Foreground="{StaticResource AccentDarkBrush}" Text="{Binding HealthLabel}" />
+                  </Border>
+                </WrapPanel>
+
+                <Grid Margin="0,8,0,0">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                  </Grid.ColumnDefinitions>
+
+                  <StackPanel>
+                    <TextBlock Foreground="{StaticResource ContentMutedTextBrush}" Text="Toplam" />
+                    <TextBlock Margin="0,4,0,0"
+                               Foreground="{StaticResource ContentHeadingBrush}"
+                               Text="{Binding CapacityLabel}" />
+                  </StackPanel>
+
+                  <StackPanel Grid.Column="1">
+                    <TextBlock Foreground="{StaticResource ContentMutedTextBrush}" Text="Kullanılan" />
+                    <TextBlock Margin="0,4,0,0"
+                               Foreground="{StaticResource ContentHeadingBrush}"
+                               Text="{Binding UsedLabel}" />
+                  </StackPanel>
+
+                  <StackPanel Grid.Column="2">
+                    <TextBlock Foreground="{StaticResource ContentMutedTextBrush}" Text="Boş" />
+                    <TextBlock Margin="0,4,0,0"
+                               Foreground="{StaticResource ContentHeadingBrush}"
+                               Text="{Binding FreeLabel}" />
+                  </StackPanel>
+                </Grid>
+
+                <ProgressBar Margin="0,12,0,0"
+                             Height="12"
+                             Minimum="0"
+                             Maximum="100"
+                             Value="{Binding UsagePercent}" />
+
+                <TextBlock Margin="0,10,0,0"
+                           TextWrapping="Wrap"
+                           Foreground="{StaticResource ContentTextBrush}"
+                           Text="{Binding WarningSummary}" />
+                <TextBlock Margin="0,6,0,0"
+                           Foreground="{StaticResource ContentMutedTextBrush}"
+                           Text="{Binding DeviceModel}" />
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <Expander Margin="0,8,0,14"
+                Background="#F7FAFB"
+                BorderBrush="{StaticResource CardBorderBrush}"
+                BorderThickness="1"
+                Padding="16"
+                Header="Gelişmiş sistem bilgileri"
+                IsExpanded="False">
+        <StackPanel Margin="0,12,0,0">
+          <TextBlock Foreground="{StaticResource ContentMutedTextBrush}" Text="Bilgisayar adı" />
+          <TextBlock Margin="0,4,0,0" Foreground="{StaticResource ContentHeadingBrush}" Text="{Binding Snapshot.System.MachineName}" />
+          <TextBlock Margin="0,12,0,0" Foreground="{StaticResource ContentMutedTextBrush}" Text="İşletim sistemi" />
+          <TextBlock Margin="0,4,0,0" Foreground="{StaticResource ContentHeadingBrush}" Text="{Binding Snapshot.System.OperatingSystem}" />
+          <TextBlock Margin="0,12,0,0" Foreground="{StaticResource ContentMutedTextBrush}" Text="Mimari" />
+          <TextBlock Margin="0,4,0,0" Foreground="{StaticResource ContentHeadingBrush}" Text="{Binding Snapshot.System.Architecture}" />
+          <TextBlock Margin="0,12,0,0" Foreground="{StaticResource ContentMutedTextBrush}" Text=".NET çalışma zamanı" />
+          <TextBlock Margin="0,4,0,0" Foreground="{StaticResource ContentHeadingBrush}" Text="{Binding Snapshot.System.Framework}" />
+          <TextBlock Margin="0,12,0,0" Foreground="{StaticResource ContentMutedTextBrush}" Text="Oturum" />
+          <TextBlock Margin="0,4,0,0" Foreground="{StaticResource ContentHeadingBrush}" Text="{Binding Snapshot.System.CurrentUser}" />
+          <TextBlock Margin="0,12,0,0" Foreground="{StaticResource ContentMutedTextBrush}" Text="Sistem sürücüsü" />
+          <TextBlock Margin="0,4,0,0" Foreground="{StaticResource ContentHeadingBrush}" Text="{Binding Snapshot.System.SystemDrive}" />
+          <TextBlock Margin="0,12,0,0" Foreground="{StaticResource ContentMutedTextBrush}" Text="Açık kalma süresi" />
+          <TextBlock Margin="0,4,0,0" Foreground="{StaticResource ContentHeadingBrush}" Text="{Binding Snapshot.System.UptimeLabel}" />
+        </StackPanel>
+      </Expander>
+
+      <Border Style="{StaticResource CardBorderStyle}">
+        <StackPanel>
+          <TextBlock FontSize="18"
+                     FontWeight="SemiBold"
+                     Foreground="{StaticResource ContentHeadingBrush}"
+                     Text="Notlar" />
+          <ItemsControl Margin="0,12,0,0"
+                        ItemsSource="{Binding Snapshot.Notes}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <TextBlock Margin="0,0,0,10"
+                           TextWrapping="Wrap"
+                           Foreground="{StaticResource ContentTextBrush}"
+                           Text="{Binding}" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

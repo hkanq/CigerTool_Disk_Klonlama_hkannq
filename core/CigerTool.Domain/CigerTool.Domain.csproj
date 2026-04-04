@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>CigerTool.Domain</AssemblyName>
+    <RootNamespace>CigerTool.Domain</RootNamespace>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,328 @@
+<UserControl x:Class="CigerTool.App.Views.Pages.CloningView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <StackPanel Margin="18">
+      <Border Style="{StaticResource CardBorderStyle}">
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+
+          <StackPanel>
+            <TextBlock FontSize="28"
+                       FontWeight="SemiBold"
+                       Foreground="{StaticResource ContentHeadingBrush}"
+                       Text="{Binding Snapshot.Heading}" />
+            <TextBlock Margin="0,10,0,0"
+                       FontSize="15"
+                       TextWrapping="Wrap"
+                       Foreground="{StaticResource ContentTextBrush}"
+                       Text="{Binding Snapshot.Summary}" />
+            <TextBlock Margin="0,12,0,0"
+                       Foreground="{StaticResource ContentMutedTextBrush}"
+                       Text="{Binding AnalysisStatus}" />
+          </StackPanel>
+
+          <Button Grid.Column="1"
+                  Width="120"
+                  Height="42"
+                  VerticalAlignment="Top"
+                  Command="{Binding RefreshCommand}"
+                  Content="Yenile"
+                  Style="{StaticResource SecondaryActionButtonStyle}" />
+        </Grid>
+      </Border>
+
+      <ItemsControl ItemsSource="{Binding Snapshot.Metrics}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <WrapPanel />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <Border Width="270" Style="{StaticResource CardBorderStyle}">
+              <StackPanel>
+                <TextBlock Foreground="{StaticResource ContentMutedTextBrush}" Text="{Binding Label}" />
+                <TextBlock Margin="0,8,0,0"
+                           FontSize="22"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource ContentHeadingBrush}"
+                           Text="{Binding Value}" />
+                <TextBlock Margin="0,10,0,0"
+                           TextWrapping="Wrap"
+                           Foreground="{StaticResource ContentTextBrush}"
+                           Text="{Binding SupportingText}" />
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <Border Style="{StaticResource CardBorderStyle}">
+        <StackPanel>
+          <TextBlock FontSize="18"
+                     FontWeight="SemiBold"
+                     Foreground="{StaticResource ContentHeadingBrush}"
+                     Text="İşlem ayarları" />
+
+          <Grid Margin="0,14,0,0">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Margin="0,0,12,0">
+              <TextBlock Foreground="{StaticResource ContentMutedTextBrush}" Text="Kopyalama türü" />
+              <ComboBox Margin="0,8,0,0"
+                        ItemsSource="{Binding Modes}"
+                        SelectedItem="{Binding SelectedMode}"
+                        DisplayMemberPath="Title" />
+              <TextBlock Margin="0,8,0,0"
+                         TextWrapping="Wrap"
+                         Foreground="{StaticResource ContentMutedTextBrush}"
+                         Text="{Binding SelectedMode.Description}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="1" Margin="0,0,12,0">
+              <TextBlock Foreground="{StaticResource ContentMutedTextBrush}" Text="Kaynak" />
+              <ComboBox Margin="0,8,0,0"
+                        ItemsSource="{Binding Snapshot.Candidates}"
+                        SelectedItem="{Binding SelectedSource}"
+                        DisplayMemberPath="Name" />
+              <TextBlock Margin="0,8,0,0"
+                         TextWrapping="Wrap"
+                         Foreground="{StaticResource ContentMutedTextBrush}"
+                         Text="{Binding SelectedSource.IdentityLabel, TargetNullValue=Kaynak sürücü seçilmedi.}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="2" Margin="0,0,12,0">
+              <TextBlock Foreground="{StaticResource ContentMutedTextBrush}" Text="Hedef" />
+              <ComboBox Margin="0,8,0,0"
+                        ItemsSource="{Binding Snapshot.Candidates}"
+                        SelectedItem="{Binding SelectedTarget}"
+                        DisplayMemberPath="Name" />
+              <TextBlock Margin="0,8,0,0"
+                         TextWrapping="Wrap"
+                         Foreground="{StaticResource ContentMutedTextBrush}"
+                         Text="{Binding SelectedTarget.WarningSummary, TargetNullValue=Hedef sürücü seçilmedi.}" />
+            </StackPanel>
+          </Grid>
+
+          <CheckBox Margin="0,16,0,0"
+                    IsChecked="{Binding ConfirmDestructiveAction}"
+                    Content="Hedef sürücünün içeriğinin üzerine yazılacağını anlıyorum." />
+
+          <StackPanel Margin="0,16,0,0"
+                      Orientation="Horizontal">
+            <Button Width="180"
+                    Height="44"
+                    Command="{Binding AnalyzeCommand}"
+                    Content="Denetimi çalıştır"
+                    Style="{StaticResource PrimaryActionButtonStyle}" />
+            <Button Width="160"
+                    Height="44"
+                    Margin="12,0,0,0"
+                    Command="{Binding StartOperationCommand}"
+                    Content="İşlemi başlat"
+                    Style="{StaticResource SecondaryActionButtonStyle}" />
+            <Button Width="120"
+                    Height="44"
+                    Margin="12,0,0,0"
+                    Command="{Binding CancelOperationCommand}"
+                    Content="İptal et"
+                    Style="{StaticResource SecondaryActionButtonStyle}" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <Border Style="{StaticResource CardBorderStyle}" Background="#F7FAFB">
+        <StackPanel>
+          <TextBlock FontSize="18"
+                     FontWeight="SemiBold"
+                     Foreground="{StaticResource ContentHeadingBrush}"
+                     Text="Denetim sonucu" />
+
+          <TextBlock Margin="0,12,0,0"
+                     FontSize="16"
+                     FontWeight="SemiBold"
+                     Foreground="{StaticResource ContentHeadingBrush}"
+                     Text="{Binding Analysis.Status, Converter={StaticResource CloneSuitabilityStatusToFriendlyTextConverter}, TargetNullValue=Henüz doğrulanmadı}" />
+          <TextBlock Margin="0,8,0,0"
+                     TextWrapping="Wrap"
+                     Foreground="{StaticResource ContentTextBrush}"
+                     Text="{Binding Analysis.Summary, TargetNullValue='Kaynak, hedef ve kopyalama türü doğrulandıktan sonra özet burada görünür.'}" />
+          <TextBlock Margin="0,8,0,0"
+                     Foreground="{StaticResource ContentTextBrush}"
+                     Text="{Binding Analysis.ComparisonLabel, TargetNullValue=Kapasite karşılaştırması bekleniyor.}" />
+          <TextBlock Margin="0,8,0,0"
+                     Foreground="{StaticResource ContentTextBrush}"
+                     Text="{Binding Analysis.RequiredCapacityLabel, TargetNullValue=Gereken alan hesaplanmadı.}" />
+        </StackPanel>
+      </Border>
+
+      <Border Style="{StaticResource CardBorderStyle}">
+        <StackPanel>
+          <TextBlock FontSize="18"
+                     FontWeight="SemiBold"
+                     Foreground="{StaticResource ContentHeadingBrush}"
+                     Text="Çalışan işlem" />
+
+          <TextBlock Margin="0,12,0,0"
+                     TextWrapping="Wrap"
+                     Foreground="{StaticResource ContentTextBrush}"
+                     Text="{Binding ProgressSummary}" />
+          <ProgressBar Margin="0,12,0,0"
+                       Height="14"
+                       Minimum="0"
+                       Maximum="100"
+                       Value="{Binding ProgressPercent, Mode=OneWay}" />
+          <TextBlock Margin="0,10,0,0"
+                     Foreground="{StaticResource ContentMutedTextBrush}"
+                     Text="{Binding ProgressDetail}" />
+          <TextBlock Margin="0,8,0,0"
+                     TextWrapping="Wrap"
+                     Foreground="{StaticResource ContentMutedTextBrush}"
+                     Text="{Binding CurrentProgress.CurrentItem, TargetNullValue=Şu an işlenen öğe burada görünür.}" />
+        </StackPanel>
+      </Border>
+
+      <Border Style="{StaticResource CardBorderStyle}">
+        <StackPanel>
+          <TextBlock FontSize="18"
+                     FontWeight="SemiBold"
+                     Foreground="{StaticResource ContentHeadingBrush}"
+                     Text="Adım adım akış" />
+
+          <ItemsControl Margin="0,12,0,0"
+                        ItemsSource="{Binding WorkflowSteps}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border Margin="0,0,0,10"
+                        Padding="14"
+                        CornerRadius="16"
+                        Background="#F7FAFB"
+                        BorderBrush="{StaticResource CardBorderBrush}"
+                        BorderThickness="1">
+                  <StackPanel>
+                    <TextBlock FontWeight="SemiBold"
+                               Foreground="{StaticResource ContentHeadingBrush}"
+                               Text="{Binding Title}" />
+                    <TextBlock Margin="0,6,0,0"
+                               TextWrapping="Wrap"
+                               Foreground="{StaticResource ContentTextBrush}"
+                               Text="{Binding Description}" />
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+
+      <Border Style="{StaticResource CardBorderStyle}">
+        <StackPanel>
+          <TextBlock FontSize="18"
+                     FontWeight="SemiBold"
+                     Foreground="{StaticResource ContentHeadingBrush}"
+                     Text="Kontroller ve uyarılar" />
+
+          <ItemsControl Margin="0,12,0,0"
+                        ItemsSource="{Binding AnalysisChecks}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border Margin="0,0,0,10"
+                        Padding="12"
+                        CornerRadius="14"
+                        Background="#F7FAFB"
+                        BorderBrush="{StaticResource CardBorderBrush}"
+                        BorderThickness="1">
+                  <StackPanel>
+                    <TextBlock FontWeight="SemiBold"
+                               Foreground="{StaticResource ContentHeadingBrush}"
+                               Text="{Binding Title}" />
+                    <TextBlock Margin="0,6,0,0"
+                               TextWrapping="Wrap"
+                               Foreground="{StaticResource ContentTextBrush}"
+                               Text="{Binding Message}" />
+                    <TextBlock Margin="0,6,0,0"
+                               Foreground="{StaticResource ContentMutedTextBrush}"
+                               Text="{Binding Severity, Converter={StaticResource OperationSeverityToFriendlyTextConverter}}" />
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+
+      <Border Style="{StaticResource CardBorderStyle}" Background="#F7FAFB">
+        <StackPanel>
+          <TextBlock FontSize="18"
+                     FontWeight="SemiBold"
+                     Foreground="{StaticResource ContentHeadingBrush}"
+                     Text="Sonraki adım" />
+          <TextBlock Margin="0,12,0,0"
+                     TextWrapping="Wrap"
+                     Foreground="{StaticResource ContentTextBrush}"
+                     Text="{Binding NextActionText}" />
+          <TextBlock Margin="0,12,0,0"
+                     TextWrapping="Wrap"
+                     Foreground="{StaticResource ContentMutedTextBrush}"
+                     Text="{Binding ScopeNote}" />
+
+          <StackPanel Margin="0,16,0,0"
+                      Orientation="Horizontal">
+            <Button Width="220"
+                    Height="44"
+                    Command="{Binding SavePlanCommand}"
+                    Content="Denetim raporunu kaydet"
+                    Style="{StaticResource SecondaryActionButtonStyle}" />
+            <Button Width="220"
+                    Height="44"
+                    Margin="12,0,0,0"
+                    Command="{Binding SaveExecutionReportCommand}"
+                    Content="Sonuç raporunu kaydet"
+                    Style="{StaticResource PrimaryActionButtonStyle}" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <Border Style="{StaticResource CardBorderStyle}">
+        <StackPanel>
+          <TextBlock FontSize="18"
+                     FontWeight="SemiBold"
+                     Foreground="{StaticResource ContentHeadingBrush}"
+                     Text="İşlem sonucu" />
+          <TextBlock Margin="0,12,0,0"
+                     FontSize="16"
+                     FontWeight="SemiBold"
+                     Foreground="{StaticResource ContentHeadingBrush}"
+                     Text="{Binding LastExecution.StatusLabel, TargetNullValue=Henüz çalışan işlem sonucu yok}" />
+          <TextBlock Margin="0,8,0,0"
+                     TextWrapping="Wrap"
+                     Foreground="{StaticResource ContentTextBrush}"
+                     Text="{Binding LastExecution.Summary, TargetNullValue='İşlem tamamlandığında bu bölümde özet görünür.'}" />
+          <TextBlock Margin="0,8,0,0"
+                     Foreground="{StaticResource ContentMutedTextBrush}"
+                     Text="{Binding LastExecution.ModeLabel, TargetNullValue=Seçilen mod burada görünür.}" />
+
+          <ItemsControl Margin="0,12,0,0"
+                        ItemsSource="{Binding ExecutionWarnings}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <TextBlock Margin="0,0,0,8"
+                           TextWrapping="Wrap"
+                           Foreground="{StaticResource ContentTextBrush}"
+                           Text="{Binding}" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>CigerTool.Infrastructure</AssemblyName>
+    <RootNamespace>CigerTool.Infrastructure</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CigerTool.Application\CigerTool.Application.csproj" />
+    <ProjectReference Include="..\CigerTool.Domain\CigerTool.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Management" />
+  </ItemGroup>
+</Project>

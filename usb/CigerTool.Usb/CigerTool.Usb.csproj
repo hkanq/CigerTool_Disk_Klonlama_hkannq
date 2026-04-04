@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>CigerTool.Usb</AssemblyName>
+    <RootNamespace>CigerTool.Usb</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\core\CigerTool.Application\CigerTool.Application.csproj" />
+    <ProjectReference Include="..\..\core\CigerTool.Domain\CigerTool.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Management" />
+  </ItemGroup>
+</Project>

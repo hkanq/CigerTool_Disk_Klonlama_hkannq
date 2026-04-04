@@ -1,0 +1,183 @@
+<UserControl x:Class="CigerTool.App.Views.Pages.DashboardView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <StackPanel Margin="18">
+      <Border Style="{StaticResource CardBorderStyle}" Background="#F6F0E3">
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+
+          <StackPanel>
+            <TextBlock FontSize="30"
+                       FontWeight="SemiBold"
+                       Foreground="{StaticResource ContentHeadingBrush}"
+                       Text="{Binding Snapshot.Heading}" />
+            <TextBlock Margin="0,10,0,0"
+                       FontSize="15"
+                       TextWrapping="Wrap"
+                       Foreground="{StaticResource ContentTextBrush}"
+                       Text="{Binding Snapshot.Summary}" />
+            <TextBlock Margin="0,12,0,0"
+                       Foreground="{StaticResource ContentMutedTextBrush}"
+                       Text="{Binding StatusMessage}" />
+          </StackPanel>
+
+          <Button Grid.Column="1"
+                  Width="120"
+                  Height="42"
+                  VerticalAlignment="Top"
+                  Command="{Binding RefreshCommand}"
+                  Content="Yenile"
+                  Style="{StaticResource SecondaryActionButtonStyle}" />
+        </Grid>
+      </Border>
+
+      <TextBlock Margin="0,4,0,16"
+                 FontSize="18"
+                 FontWeight="SemiBold"
+                 Foreground="{StaticResource ContentHeadingBrush}"
+                 Text="Bugünkü görünüm" />
+
+      <ItemsControl ItemsSource="{Binding Snapshot.Metrics}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <WrapPanel />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <Border Width="270" Style="{StaticResource CardBorderStyle}">
+              <StackPanel>
+                <TextBlock FontSize="13"
+                           Foreground="{StaticResource ContentMutedTextBrush}"
+                           Text="{Binding Label}" />
+                <TextBlock Margin="0,8,0,0"
+                           FontSize="24"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource ContentHeadingBrush}"
+                           Text="{Binding Value}" />
+                <TextBlock Margin="0,10,0,0"
+                           TextWrapping="Wrap"
+                           Foreground="{StaticResource ContentTextBrush}"
+                           Text="{Binding SupportingText}" />
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <TextBlock Margin="0,10,0,16"
+                 FontSize="18"
+                 FontWeight="SemiBold"
+                 Foreground="{StaticResource ContentHeadingBrush}"
+                 Text="Önerilen adımlar" />
+
+      <ItemsControl ItemsSource="{Binding Snapshot.Highlights}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <Border Style="{StaticResource CardBorderStyle}">
+              <StackPanel>
+                <TextBlock FontSize="15"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource ContentHeadingBrush}"
+                           Text="{Binding Title}" />
+                <TextBlock Margin="0,8,0,0"
+                           TextWrapping="Wrap"
+                           Foreground="{StaticResource ContentTextBrush}"
+                           Text="{Binding Description}" />
+                <TextBlock Margin="0,10,0,0"
+                           Foreground="{StaticResource ContentMutedTextBrush}"
+                           Text="{Binding Severity, Converter={StaticResource OperationSeverityToFriendlyTextConverter}}" />
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <TextBlock Margin="0,10,0,16"
+                 FontSize="18"
+                 FontWeight="SemiBold"
+                 Foreground="{StaticResource ContentHeadingBrush}"
+                 Text="Son olaylar" />
+
+      <ItemsControl ItemsSource="{Binding Snapshot.RecentEntries}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <Border Style="{StaticResource CardBorderStyle}">
+              <StackPanel>
+                <TextBlock FontSize="13"
+                           Foreground="{StaticResource ContentMutedTextBrush}"
+                           Text="{Binding Timestamp}" />
+                <TextBlock Margin="0,6,0,0"
+                           FontSize="15"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource ContentHeadingBrush}"
+                           Text="{Binding Area}" />
+                <TextBlock Margin="0,8,0,0"
+                           TextWrapping="Wrap"
+                           Foreground="{StaticResource ContentTextBrush}"
+                           Text="{Binding Message}" />
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <Expander Margin="0,8,0,14"
+                Background="#F7FAFB"
+                BorderBrush="{StaticResource CardBorderBrush}"
+                BorderThickness="1"
+                Padding="16"
+                Header="Teknik denetim ve depolama bilgileri"
+                IsExpanded="False">
+        <StackPanel Margin="0,12,0,0">
+          <TextBlock FontSize="16"
+                     FontWeight="SemiBold"
+                     Foreground="{StaticResource ContentHeadingBrush}"
+                     Text="{Binding Snapshot.Diagnostics.ReadinessLabel}" />
+          <TextBlock Margin="0,8,0,0"
+                     TextWrapping="Wrap"
+                     Foreground="{StaticResource ContentTextBrush}"
+                     Text="{Binding Snapshot.Diagnostics.Summary}" />
+          <TextBlock Margin="0,12,0,0"
+                     TextWrapping="Wrap"
+                     Foreground="{StaticResource ContentMutedTextBrush}"
+                     Text="{Binding Snapshot.Diagnostics.Paths.DataRoot}" />
+          <ItemsControl Margin="0,12,0,0"
+                        ItemsSource="{Binding Snapshot.Diagnostics.Checks}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border Margin="0,0,0,10"
+                        Padding="14"
+                        CornerRadius="16"
+                        Background="White"
+                        BorderBrush="{StaticResource CardBorderBrush}"
+                        BorderThickness="1">
+                  <StackPanel>
+                    <TextBlock FontSize="15"
+                               FontWeight="SemiBold"
+                               Foreground="{StaticResource ContentHeadingBrush}"
+                               Text="{Binding Title}" />
+                    <TextBlock Margin="0,6,0,0"
+                               Foreground="{StaticResource ContentHeadingBrush}"
+                               Text="{Binding Status}" />
+                    <TextBlock Margin="0,8,0,0"
+                               TextWrapping="Wrap"
+                               Foreground="{StaticResource ContentTextBrush}"
+                               Text="{Binding Detail}" />
+                    <TextBlock Margin="0,8,0,0"
+                               Foreground="{StaticResource ContentMutedTextBrush}"
+                               Text="{Binding Severity, Converter={StaticResource OperationSeverityToFriendlyTextConverter}}" />
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Expander>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

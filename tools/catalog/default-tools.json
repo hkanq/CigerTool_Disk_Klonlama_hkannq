@@ -1,0 +1,39 @@
+[
+  {
+    "id": "system-info",
+    "name": "System Information",
+    "category": "Windows",
+    "description": "Windows yerlesik sistem bilgi araci.",
+    "executablePath": "msinfo32.exe",
+    "availableInWinPe": false,
+    "isBundled": false
+  },
+  {
+    "id": "log-folder",
+    "name": "Logs Folder",
+    "category": "Support",
+    "description": "CigerTool log klasorunu ac.",
+    "executablePath": "explorer.exe",
+    "arguments": "{LogDirectory}",
+    "availableInWinPe": true,
+    "isBundled": false
+  },
+  {
+    "id": "disk-management",
+    "name": "Disk Management",
+    "category": "Windows",
+    "description": "Windows Disk Management konsolunu ac.",
+    "executablePath": "diskmgmt.msc",
+    "availableInWinPe": false,
+    "isBundled": false
+  },
+  {
+    "id": "crystal-disk-info",
+    "name": "CrystalDiskInfo Portable",
+    "category": "Bundled",
+    "description": "Bundled ise SMART ve disk sagligi icin kullanilacak portable arac.",
+    "executablePath": "Tools\\CrystalDiskInfo\\DiskInfo64.exe",
+    "availableInWinPe": true,
+    "isBundled": true
+  }
+]

@@ -1,0 +1,137 @@
+<UserControl x:Class="CigerTool.App.Views.Pages.LogsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <StackPanel Margin="18">
+      <Border Style="{StaticResource CardBorderStyle}">
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+
+          <StackPanel>
+            <TextBlock FontSize="28"
+                       FontWeight="SemiBold"
+                       Foreground="{StaticResource ContentHeadingBrush}"
+                       Text="{Binding Snapshot.Heading}" />
+            <TextBlock Margin="0,10,0,0"
+                       TextWrapping="Wrap"
+                       Foreground="{StaticResource ContentTextBrush}"
+                       Text="{Binding Snapshot.Summary}" />
+            <TextBlock Margin="0,12,0,0"
+                       Foreground="{StaticResource ContentMutedTextBrush}"
+                       Text="{Binding StatusMessage}" />
+          </StackPanel>
+
+          <Button Grid.Column="1"
+                  Width="130"
+                  Height="42"
+                  Margin="0,0,12,0"
+                  VerticalAlignment="Top"
+                  Command="{Binding RefreshCommand}"
+                  Content="Yenile"
+                  Style="{StaticResource SecondaryActionButtonStyle}" />
+
+          <Button Grid.Column="2"
+                  Width="150"
+                  Height="42"
+                  VerticalAlignment="Top"
+                  Command="{Binding OpenLogFolderCommand}"
+                  Content="Klasörü aç"
+                  Style="{StaticResource PrimaryActionButtonStyle}" />
+        </Grid>
+      </Border>
+
+      <ItemsControl ItemsSource="{Binding Snapshot.Metrics}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <WrapPanel />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <Border Width="250" Style="{StaticResource CardBorderStyle}">
+              <StackPanel>
+                <TextBlock Foreground="{StaticResource ContentMutedTextBrush}" Text="{Binding Label}" />
+                <TextBlock Margin="0,8,0,0"
+                           FontSize="22"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource ContentHeadingBrush}"
+                           Text="{Binding Value}" />
+                <TextBlock Margin="0,10,0,0"
+                           TextWrapping="Wrap"
+                           Foreground="{StaticResource ContentTextBrush}"
+                           Text="{Binding SupportingText}" />
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <Expander Margin="0,8,0,14"
+                Background="#F7FAFB"
+                BorderBrush="{StaticResource CardBorderBrush}"
+                BorderThickness="1"
+                Padding="16"
+                Header="Günlük dosyaları"
+                IsExpanded="False">
+        <StackPanel Margin="0,12,0,0">
+          <TextBlock FontWeight="SemiBold"
+                     Foreground="{StaticResource ContentHeadingBrush}"
+                     Text="Metin günlüğü" />
+          <TextBlock Margin="0,6,0,0"
+                     TextWrapping="Wrap"
+                     Foreground="{StaticResource ContentTextBrush}"
+                     Text="{Binding Snapshot.TextLogPath}" />
+          <TextBlock Margin="0,12,0,0"
+                     FontWeight="SemiBold"
+                     Foreground="{StaticResource ContentHeadingBrush}"
+                     Text="Yapılandırılmış günlük" />
+          <TextBlock Margin="0,6,0,0"
+                     TextWrapping="Wrap"
+                     Foreground="{StaticResource ContentTextBrush}"
+                     Text="{Binding Snapshot.StructuredLogPath}" />
+        </StackPanel>
+      </Expander>
+
+      <ItemsControl ItemsSource="{Binding Snapshot.Entries}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <Border Style="{StaticResource CardBorderStyle}">
+              <StackPanel>
+                <WrapPanel>
+                  <TextBlock Foreground="{StaticResource ContentMutedTextBrush}" Text="{Binding Timestamp}" />
+                  <TextBlock Margin="12,0,0,0"
+                             Foreground="{StaticResource ContentMutedTextBrush}"
+                             Text="{Binding Severity, Converter={StaticResource OperationSeverityToFriendlyTextConverter}}" />
+                  <TextBlock Margin="12,0,0,0"
+                             Foreground="{StaticResource ContentMutedTextBrush}"
+                             Text="{Binding Area}" />
+                </WrapPanel>
+                <TextBlock Margin="0,8,0,0"
+                           TextWrapping="Wrap"
+                           FontSize="15"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource ContentHeadingBrush}"
+                           Text="{Binding Message}" />
+                <Expander Margin="0,12,0,0"
+                          Header="Ayrıntılar"
+                          IsExpanded="False">
+                  <StackPanel Margin="0,10,0,0">
+                    <TextBlock Foreground="{StaticResource ContentMutedTextBrush}" Text="{Binding EventId}" />
+                    <TextBlock Margin="0,6,0,0"
+                               TextWrapping="Wrap"
+                               Foreground="{StaticResource ContentTextBrush}"
+                               Text="{Binding Details, TargetNullValue=Ayrıntı yok.}" />
+                  </StackPanel>
+                </Expander>
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

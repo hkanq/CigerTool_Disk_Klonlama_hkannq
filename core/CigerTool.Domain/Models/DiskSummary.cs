@@ -1,0 +1,26 @@
+namespace CigerTool.Domain.Models;
+
+public sealed record DiskSummary(
+    string Id,
+    string Name,
+    string DriveLetter,
+    string FileSystem,
+    string ConnectionType,
+    string CapacityLabel,
+    string UsedLabel,
+    string FreeLabel,
+    string LayoutLabel,
+    string HealthLabel,
+    long TotalBytes,
+    long UsedBytes,
+    long FreeBytes,
+    bool IsSystemVolume,
+    bool IsReady,
+    string DeviceModel,
+    string BusType,
+    string MediaType,
+    string IdentityLabel,
+    string WarningSummary,
+    int UsagePercent,
+    bool IsRemovable,
+    bool SupportsRawAccess);
